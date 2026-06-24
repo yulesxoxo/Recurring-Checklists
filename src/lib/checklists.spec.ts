@@ -298,22 +298,17 @@ describe('schedule normalization', () => {
 describe('direct checklist links', () => {
 	it('selects an existing checklist id or link key from the query string', () => {
 		expect(
-			checklistIdFromSearch('?c=checklist-2', [
+			checklistIdFromSearch('?view=checklist-2', [
 				{ id: 'checklist-1', name: 'One', description: '', sections: [] },
 				{ id: 'checklist-2', name: 'Two', description: '', sections: [] }
 			])
 		).toBe('checklist-2');
 		expect(
-			checklistIdFromSearch('?c=nte', [
+			checklistIdFromSearch('?view=nte', [
 				{ id: 'checklist-1', name: 'NTE', description: '', linkKey: 'NTE', sections: [] }
 			])
 		).toBe('checklist-1');
-		expect(
-			checklistIdFromSearch('?checklist=checklist-1', [
-				{ id: 'checklist-1', name: 'Legacy', description: '', sections: [] }
-			])
-		).toBe('checklist-1');
-		expect(checklistIdFromSearch('?c=missing', [])).toBeNull();
+		expect(checklistIdFromSearch('?view=missing', [])).toBeNull();
 	});
 
 	it('detects link key conflicts case-insensitively', () => {

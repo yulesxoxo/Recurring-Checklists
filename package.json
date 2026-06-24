@@ -9,7 +9,7 @@
 		"build": "wrangler types --check && vite build",
 		"preview": "pnpm run build && wrangler dev",
 		"prepare": "svelte-kit sync || echo ''",
-		"check": "wrangler types --check && svelte-kit sync && svelte-check",
+		"check": "wrangler types --check && svelte-kit sync && svelte-check --tsconfig ./tsconfig.check.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.check.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
