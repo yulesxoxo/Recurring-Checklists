@@ -8,14 +8,11 @@
 		DIRECT_LINK_PARAM,
 		alignDateToWeekday,
 		allFrequencies,
-		checklistIdFromSearch,
 		createEmptyAppState,
-		directLinkValue,
 		exportPortableChecklist,
-		getCompletion,
+		getResetWindowStart,
 		importPortableChecklists,
 		insertArrayItem,
-		isTaskComplete,
 		linkKeyConflict,
 		loadAppState,
 		moveArrayItem,
@@ -52,15 +49,21 @@
 		persist();
 		enterChecklistFromUrl(true);
 
-		const timer = window.setInterval(() => {
+		let timer: number | undefined;
+		const delayToNextMinute = 60_000 - (Date.now() % 60_000);
+		const timeout = window.setTimeout(() => {
 			now = new Date();
-		}, 60_000);
+			timer = window.setInterval(() => {
+				now = new Date();
+			}, 60_000);
+		}, delayToNextMinute);
 
 		const onPopState = () => enterChecklistFromUrl(false);
 		window.addEventListener('popstate', onPopState);
 
 		return () => {
-			window.clearInterval(timer);
+			window.clearTimeout(timeout);
+			if (timer !== undefined) window.clearInterval(timer);
 			window.removeEventListener('popstate', onPopState);
 		};
 	});
@@ -123,6 +126,22 @@
 
 		const search = url.searchParams.toString();
 		return `${url.origin}?${search}`;
+	}
+
+	function checklistIdFromSearch(search: string, checklists: Checklist[]): string | null {
+		const params = new URLSearchParams(search);
+		const directValue = params.get(DIRECT_LINK_PARAM);
+		if (!directValue) return null;
+
+		const directValueLower = directValue.toLowerCase();
+		const checklist = checklists.find(
+			(item) => item.id === directValue || item.linkKey?.toLowerCase() === directValueLower
+		);
+		return checklist?.id ?? null;
+	}
+
+	function directLinkValue(checklist: Checklist): string {
+		return checklist.linkKey || checklist.id;
 	}
 
 	async function copyChecklistLink(checklist: Checklist): Promise<void> {
@@ -429,10 +448,29 @@
 	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
 		if (!selectedChecklist) return false;
 
-		return isTaskComplete(
-			section,
-			getCompletion(appState.completions, selectedChecklist.id, section.id, task.id),
-			now
+		return isTaskComplete(section, getCompletion(selectedChecklist.id, section.id, task.id), now);
+	}
+
+	function getCompletion(
+		checklistId: string,
+		sectionId: string,
+		taskId: string
+	): CompletionRecord | undefined {
+		return appState.completions[checklistId]?.[sectionId]?.[taskId];
+	}
+
+	function isTaskComplete(
+		section: ChecklistSection,
+		record: CompletionRecord | undefined,
+		reference: Date
+	): boolean {
+		if (!record) return false;
+
+		const completedAt = new Date(record.completedAt);
+		const windowStart = getResetWindowStart(section.schedule, reference);
+
+		return (
+			!Number.isNaN(completedAt.getTime()) && windowStart !== null && completedAt >= windowStart
 		);
 	}
 

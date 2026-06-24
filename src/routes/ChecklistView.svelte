@@ -1,16 +1,6 @@
 <script lang="ts">
 	import { ArrowLeft, CheckCircle2 } from '@lucide/svelte';
-	import {
-		countTasks,
-		describeSchedule,
-		formatLocalReset,
-		formatUtcReset,
-		getNextReset,
-		titleCase,
-		type Checklist,
-		type ChecklistSection,
-		type ChecklistTask
-	} from '$lib/checklists';
+	import { countTasks, describeSchedule, getNextReset, titleCase } from '$lib/checklists';
 
 	let {
 		checklist,
@@ -27,6 +17,31 @@
 		taskIsDone: (section: ChecklistSection, task: ChecklistTask) => boolean;
 		sectionProgress: (section: ChecklistSection) => { done: number; total: number };
 	} = $props();
+
+	function formatUtcReset(date: Date | null): string {
+		return formatResetDate(date, 'UTC');
+	}
+
+	function formatLocalReset(date: Date | null): string {
+		return formatResetDate(date);
+	}
+
+	function formatResetDate(date: Date | null, timeZone?: string): string {
+		if (!date) return 'Not scheduled';
+
+		const formatter = new Intl.DateTimeFormat('en-US', {
+			weekday: 'short',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			hour12: false,
+			...(timeZone ? { timeZone } : {}),
+			timeZoneName: 'short'
+		});
+
+		return formatter.format(date);
+	}
 </script>
 
 <section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">

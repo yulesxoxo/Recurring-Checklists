@@ -1,4 +1,4 @@
-import { DIRECT_LINK_PARAM, STORAGE_KEY } from './constants';
+import { STORAGE_KEY } from './constants';
 import type {
 	AppState,
 	Checklist,
@@ -124,28 +124,6 @@ export function moveArrayItem<T>(items: T[], index: number, direction: -1 | 1): 
 	return moved;
 }
 
-export function getCompletion(
-	completions: CompletionState,
-	checklistId: string,
-	sectionId: string,
-	taskId: string
-): CompletionRecord | undefined {
-	return completions[checklistId]?.[sectionId]?.[taskId];
-}
-
-export function isTaskComplete(
-	section: ChecklistSection,
-	record: CompletionRecord | undefined,
-	now = new Date()
-): boolean {
-	if (!record) return false;
-
-	const completedAt = new Date(record.completedAt);
-	const windowStart = getResetWindowStart(section.schedule, now);
-
-	return !Number.isNaN(completedAt.getTime()) && windowStart !== null && completedAt >= windowStart;
-}
-
 export function getResetWindowStart(schedule: RecurringSchedule, now = new Date()): Date | null {
 	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
 
@@ -217,43 +195,6 @@ export function describeSchedule(schedule: RecurringSchedule): string {
 	}
 }
 
-export function formatUtcReset(date: Date | null): string {
-	if (!date) return 'Not scheduled';
-
-	const formatter = new Intl.DateTimeFormat('en-US', {
-		weekday: 'short',
-		month: 'short',
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-		hour12: false,
-		timeZone: 'UTC',
-		timeZoneName: 'short'
-	});
-
-	return formatter.format(date);
-}
-
-export function formatLocalReset(date: Date | null): string {
-	if (!date) return 'Not scheduled';
-
-	const formatter = new Intl.DateTimeFormat('en-US', {
-		weekday: 'short',
-		month: 'short',
-		day: 'numeric',
-		hour: '2-digit',
-		minute: '2-digit',
-		hour12: false,
-		timeZoneName: 'short'
-	});
-
-	return formatter.format(date);
-}
-
-export function formatResetPair(date: Date | null): string {
-	return `Local: ${formatLocalReset(date)} | UTC: ${formatUtcReset(date)}`;
-}
-
 export function utcTimeToLocalTime(time: string, reference = new Date()): string {
 	const { hours, minutes } = parseResetTime(time);
 	const utcDate = new Date(
@@ -282,12 +223,6 @@ export function localTimeToUtcTime(time: string, reference = new Date()): string
 	return formatTimeParts(localDate.getUTCHours(), localDate.getUTCMinutes());
 }
 
-export function scheduleInputTime(schedule: RecurringSchedule, reference = new Date()): string {
-	return schedule.timeMode === 'local'
-		? utcTimeToLocalTime(schedule.resetTimeUtc, reference)
-		: normalizeResetTime(schedule.resetTimeUtc);
-}
-
 export function scheduleInputTimeToUtc(
 	time: string,
 	timeMode: ScheduleTimeMode,
@@ -313,22 +248,6 @@ export function exportPortableChecklist(checklist: Checklist): PortableChecklist
 			}))
 		}
 	};
-}
-
-export function checklistIdFromSearch(search: string, checklists: Checklist[]): string | null {
-	const params = new URLSearchParams(search);
-	const directValue = params.get(DIRECT_LINK_PARAM);
-	if (!directValue) return null;
-
-	const directValueLower = directValue.toLowerCase();
-	const checklist = checklists.find(
-		(item) => item.id === directValue || item.linkKey?.toLowerCase() === directValueLower
-	);
-	return checklist?.id ?? null;
-}
-
-export function directLinkValue(checklist: Checklist): string {
-	return checklist.linkKey || checklist.id;
 }
 
 export function normalizeLinkKey(value: unknown): string | undefined {
@@ -453,10 +372,6 @@ export function alignDateToWeekday(dateValue: string, weekday: Weekday): string 
 	date.setUTCDate(date.getUTCDate() + daysToAdd);
 
 	return date.toISOString().slice(0, 10);
-}
-
-export function dateInputMinForWeekday(weekday: Weekday): string {
-	return alignDateToWeekday('1970-01-01', weekday);
 }
 
 export function titleCase(value: string): string {

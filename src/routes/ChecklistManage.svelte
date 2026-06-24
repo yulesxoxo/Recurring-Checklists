@@ -10,16 +10,7 @@
 		Trash2,
 		Upload
 	} from '@lucide/svelte';
-	import {
-		countTasks,
-		type AppState,
-		type Checklist,
-		type ChecklistSection,
-		type ChecklistTask,
-		type Frequency,
-		type ScheduleTimeMode,
-		type Weekday
-	} from '$lib/checklists';
+	import { countTasks } from '$lib/checklists';
 	import ChecklistEditor from './create/ChecklistEditor.svelte';
 
 	type EditingErrors = { linkKey?: string };

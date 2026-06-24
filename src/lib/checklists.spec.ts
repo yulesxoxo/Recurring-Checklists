@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
 	STORAGE_KEY,
-	checklistIdFromSearch,
 	createEmptyAppState,
 	exportPortableChecklist,
 	getResetWindowStart,
@@ -13,9 +12,7 @@ import {
 	moveArrayItem,
 	normalizeSchedule,
 	saveAppState,
-	scheduleInputTimeToUtc,
-	type AppState,
-	type RecurringSchedule
+	scheduleInputTimeToUtc
 } from './checklists';
 
 class MemoryStorage implements Storage {
@@ -296,21 +293,6 @@ describe('schedule normalization', () => {
 });
 
 describe('direct checklist links', () => {
-	it('selects an existing checklist id or link key from the query string', () => {
-		expect(
-			checklistIdFromSearch('?view=checklist-2', [
-				{ id: 'checklist-1', name: 'One', description: '', sections: [] },
-				{ id: 'checklist-2', name: 'Two', description: '', sections: [] }
-			])
-		).toBe('checklist-2');
-		expect(
-			checklistIdFromSearch('?view=nte', [
-				{ id: 'checklist-1', name: 'NTE', description: '', linkKey: 'NTE', sections: [] }
-			])
-		).toBe('checklist-1');
-		expect(checklistIdFromSearch('?view=missing', [])).toBeNull();
-	});
-
 	it('detects link key conflicts case-insensitively', () => {
 		expect(
 			linkKeyConflict(
