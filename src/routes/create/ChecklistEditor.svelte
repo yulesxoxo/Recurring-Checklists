@@ -100,7 +100,13 @@
 </script>
 
 <section class="rounded-container border border-surface-800 bg-surface-900 p-5 shadow-sm">
-	<form class="flex flex-col gap-5" onsubmit={(event) => event.preventDefault()}>
+	<form
+		class="flex flex-col gap-5"
+		onsubmit={(event) => {
+			event.preventDefault();
+			onSave();
+		}}
+	>
 		<div class="flex items-start justify-between gap-3">
 			<div>
 				<h2 class="text-lg font-semibold text-surface-50">Checklist editor</h2>
@@ -110,7 +116,7 @@
 
 		<label class="label">
 			<span class="label-text">Name</span>
-			<input class="input" bind:value={checklist.name} placeholder="Checklist name" />
+			<input class="input" bind:value={checklist.name} placeholder="Checklist name" required />
 		</label>
 
 		<label class="label">
@@ -209,7 +215,7 @@
 						<div class="mb-3">
 							<label class="label">
 								<span class="label-text">Section name</span>
-								<input class="input" bind:value={section.name} placeholder="Daily" />
+								<input class="input" bind:value={section.name} placeholder="Daily" required />
 							</label>
 						</div>
 
@@ -410,7 +416,7 @@
 		</button>
 
 		<div class="flex justify-end gap-2 border-t border-surface-800 pt-4">
-			<button class="btn preset-filled-success-500" type="button" onclick={onSave}>
+			<button class="btn preset-filled-success-500" type="submit">
 				<Save size={18} aria-hidden="true" />
 				Save
 			</button>
