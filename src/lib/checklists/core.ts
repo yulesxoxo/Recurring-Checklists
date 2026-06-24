@@ -5,7 +5,6 @@ import type {
 	ChecklistParseOptions,
 	ChecklistSection,
 	ChecklistTask,
-	CompletionRecord,
 	CompletionState,
 	Frequency,
 	ImportPortableChecklistsOptions,
