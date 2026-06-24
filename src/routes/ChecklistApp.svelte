@@ -6,6 +6,14 @@
 	import ChecklistView from './ChecklistView.svelte';
 	import {
 		DIRECT_LINK_PARAM,
+		type AppState,
+		type Checklist,
+		type ChecklistSection,
+		type ChecklistTask,
+		type CompletionRecord,
+		type Frequency,
+		type ScheduleTimeMode,
+		type Weekday,
 		alignDateToWeekday,
 		allFrequencies,
 		createEmptyAppState,

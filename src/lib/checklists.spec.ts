@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { AppState, RecurringSchedule } from './checklists';
 import {
 	STORAGE_KEY,
 	createEmptyAppState,

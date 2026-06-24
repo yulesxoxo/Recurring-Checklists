@@ -1,6 +1,14 @@
 <script lang="ts">
 	import { ArrowLeft, CheckCircle2 } from '@lucide/svelte';
-	import { countTasks, describeSchedule, getNextReset, titleCase } from '$lib/checklists';
+	import {
+		type Checklist,
+		type ChecklistSection,
+		type ChecklistTask,
+		countTasks,
+		describeSchedule,
+		getNextReset,
+		titleCase
+	} from '$lib/checklists';
 
 	let {
 		checklist,

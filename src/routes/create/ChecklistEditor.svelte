@@ -3,6 +3,12 @@
 	import { Accordion } from '@skeletonlabs/skeleton-svelte';
 	import {
 		DIRECT_LINK_PARAM,
+		type Checklist,
+		type ChecklistSection,
+		type Frequency,
+		type RecurringSchedule,
+		type ScheduleTimeMode,
+		type Weekday,
 		alignDateToWeekday,
 		describeSchedule,
 		devFrequencies,

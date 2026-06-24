@@ -4,6 +4,12 @@
 	import { ArrowLeft } from '@lucide/svelte';
 	import ChecklistEditor from './ChecklistEditor.svelte';
 	import {
+		type Checklist,
+		type ChecklistSection,
+		type ChecklistTask,
+		type Frequency,
+		type ScheduleTimeMode,
+		type Weekday,
 		alignDateToWeekday,
 		allFrequencies,
 		insertArrayItem,
