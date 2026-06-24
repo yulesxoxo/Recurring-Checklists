@@ -5,6 +5,7 @@ import {
 	parseUtcDateInput,
 	todayUtc
 } from '../date-time';
+import { createId } from '../id';
 import type {
 	Checklist,
 	ChecklistParseOptions,
@@ -201,12 +202,6 @@ function normalizePortableSchedule(
 	}
 
 	return normalizeSchedule(value, options);
-}
-
-function createId(): string {
-	return (
-		globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`
-	);
 }
 
 function isFrequency(value: unknown, options: ChecklistParseOptions): value is Frequency {

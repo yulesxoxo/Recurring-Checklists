@@ -21,6 +21,7 @@
 		saveAppState
 	} from '$lib/checklists';
 	import { alignDateToWeekday, getResetWindowStart, todayUtc } from '$lib/date-time';
+	import { createId } from '$lib/id';
 
 	type Mode = 'manage' | 'view';
 
@@ -352,12 +353,6 @@
 			title,
 			notes: ''
 		};
-	}
-
-	function createId(): string {
-		return (
-			globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`
-		);
 	}
 
 	function filenameSlug(value: string): string {
