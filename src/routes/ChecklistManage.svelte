@@ -20,7 +20,7 @@
 		type ScheduleTimeMode,
 		type Weekday
 	} from '$lib/checklists';
-	import ChecklistEditor from './ChecklistEditor.svelte';
+	import ChecklistEditor from './create/ChecklistEditor.svelte';
 
 	type EditingErrors = { linkKey?: string };
 
