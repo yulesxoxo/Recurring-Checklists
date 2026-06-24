@@ -6,9 +6,12 @@ import {
 	exportPortableChecklist,
 	getResetWindowStart,
 	importPortableChecklists,
+	insertArrayItem,
 	linkKeyConflict,
 	localTimeToUtcTime,
 	loadAppState,
+	moveArrayItem,
+	normalizeSchedule,
 	saveAppState,
 	scheduleInputTimeToUtc,
 	type AppState,
@@ -227,6 +230,68 @@ describe('reset windows', () => {
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:15:30.000Z'))?.toISOString()).toBe(
 			'2026-06-24T12:15:00.000Z'
 		);
+	});
+
+	it('ignores reset time for minutely boundaries', () => {
+		const now = new Date('2026-06-24T12:15:30.000Z');
+
+		expect(
+			getResetWindowStart({ frequency: 'minutely', resetTimeUtc: '00:00' }, now)?.toISOString()
+		).toBe('2026-06-24T12:15:00.000Z');
+		expect(
+			getResetWindowStart({ frequency: 'minutely', resetTimeUtc: '23:59' }, now)?.toISOString()
+		).toBe('2026-06-24T12:15:00.000Z');
+	});
+});
+
+describe('reorder helpers', () => {
+	it('keeps the first item in place when moving up', () => {
+		const items = ['a', 'b', 'c'];
+
+		expect(moveArrayItem(items, 0, -1)).toBe(items);
+		expect(moveArrayItem(items, 0, -1)).toEqual(['a', 'b', 'c']);
+	});
+
+	it('keeps the last item in place when moving down', () => {
+		const items = ['a', 'b', 'c'];
+
+		expect(moveArrayItem(items, 2, 1)).toBe(items);
+		expect(moveArrayItem(items, 2, 1)).toEqual(['a', 'b', 'c']);
+	});
+
+	it('moves a middle item up or down by one position', () => {
+		expect(moveArrayItem(['a', 'b', 'c'], 1, -1)).toEqual(['b', 'a', 'c']);
+		expect(moveArrayItem(['a', 'b', 'c'], 1, 1)).toEqual(['a', 'c', 'b']);
+	});
+
+	it('inserts above and below the requested index', () => {
+		const items = ['a', 'c'];
+
+		expect(insertArrayItem(items, 'b', 1)).toEqual(['a', 'b', 'c']);
+		expect(insertArrayItem(items, 'b', 2)).toEqual(['a', 'c', 'b']);
+	});
+});
+
+describe('schedule normalization', () => {
+	it('removes weekly metadata when switching an editable schedule to minutely', () => {
+		const schedule = normalizeSchedule(
+			{
+				frequency: 'minutely',
+				resetTimeUtc: '09:30',
+				timeMode: 'local',
+				resetWeekday: 'monday',
+				anchorDate: '2026-06-22'
+			},
+			{ allowDevFrequencies: true }
+		);
+
+		expect(schedule).toEqual({
+			frequency: 'minutely',
+			resetTimeUtc: '09:30',
+			timeMode: 'local',
+			resetWeekday: undefined,
+			anchorDate: undefined
+		});
 	});
 });
 

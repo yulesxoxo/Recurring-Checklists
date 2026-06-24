@@ -189,6 +189,22 @@ export function countTasks(checklist: Checklist): number {
 	return checklist.sections.reduce((total, section) => total + section.tasks.length, 0);
 }
 
+export function insertArrayItem<T>(items: T[], item: T, position = items.length): T[] {
+	const index = clampIndex(position, 0, items.length);
+	return [...items.slice(0, index), item, ...items.slice(index)];
+}
+
+export function moveArrayItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
+	const nextIndex = index + direction;
+	if (index < 0 || index >= items.length || nextIndex < 0 || nextIndex >= items.length) {
+		return items;
+	}
+
+	const moved = [...items];
+	[moved[index], moved[nextIndex]] = [moved[nextIndex], moved[index]];
+	return moved;
+}
+
 export function getCompletion(
 	completions: CompletionState,
 	checklistId: string,
@@ -680,6 +696,11 @@ function addDays(date: Date, days: number): Date {
 
 function formatTimeParts(hours: number, minutes: number): string {
 	return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}
+
+function clampIndex(value: number, min: number, max: number): number {
+	if (!Number.isFinite(value)) return max;
+	return Math.min(Math.max(Math.trunc(value), min), max);
 }
 
 function createId(): string {
