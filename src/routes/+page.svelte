@@ -4,49 +4,70 @@
 		ArrowLeft,
 		CheckCircle2,
 		ClipboardList,
+		Copy,
 		DoorOpen,
+		Download,
 		Pencil,
 		Plus,
 		RotateCcw,
 		Save,
-		Trash2
+		Trash2,
+		Upload
 	} from '@lucide/svelte';
 	import {
+		DIRECT_LINK_PARAM,
+		LEGACY_DIRECT_LINK_PARAM,
+		alignDateToWeekday,
+		checklistIdFromSearch,
 		countTasks,
 		createEmptyAppState,
+		dateInputMinForWeekday,
+		directLinkValue,
+		devFrequencies,
 		describeSchedule,
+		exportPortableChecklist,
+		formatLocalReset,
+		formatResetPair,
 		formatUtcReset,
 		getCompletion,
 		getNextReset,
 		getResetWindowStart,
+		importPortableChecklists,
 		isTaskComplete,
+		linkKeyConflict,
 		loadAppState,
+		normalizeLinkKey,
+		normalizeSchedule,
+		productionFrequencies,
 		saveAppState,
+		scheduleInputTime,
+		scheduleInputTimeToUtc,
+		todayUtc,
+		titleCase,
+		weekdays,
 		type AppState,
 		type Checklist,
 		type ChecklistSection,
 		type ChecklistTask,
 		type Frequency,
+		type ScheduleTimeMode,
 		type Weekday
 	} from '$lib/checklists';
 
 	type Mode = 'manage' | 'view';
 
-	const weekdays: Weekday[] = [
-		'sunday',
-		'monday',
-		'tuesday',
-		'wednesday',
-		'thursday',
-		'friday',
-		'saturday'
-	];
-	const frequencies: Frequency[] = ['daily', 'weekly', 'biweekly'];
+	const frequencies: Frequency[] = import.meta.env.DEV
+		? [...productionFrequencies, ...devFrequencies]
+		: productionFrequencies;
 
 	let appState = $state<AppState>(createEmptyAppState());
 	let mode = $state<Mode>('manage');
 	let selectedChecklistId = $state<string | null>(null);
 	let editingChecklist = $state<Checklist | null>(null);
+	let editingErrors = $state<{ linkKey?: string }>({});
+	let importInput = $state<HTMLInputElement>();
+	let importFeedback = $state('');
+	let copyFeedback = $state('');
 	let mounted = false;
 	let now = $state(new Date());
 
@@ -55,22 +76,126 @@
 	);
 
 	onMount(() => {
-		appState = normalizeAppState(loadAppState(localStorage));
+		appState = loadAppState(localStorage, { allowDevFrequencies: import.meta.env.DEV });
 		mounted = true;
 		persist();
+		enterChecklistFromUrl(true);
 
 		const timer = window.setInterval(() => {
 			now = new Date();
 		}, 60_000);
 
-		return () => window.clearInterval(timer);
+		const onPopState = () => enterChecklistFromUrl(false);
+		window.addEventListener('popstate', onPopState);
+
+		return () => {
+			window.clearInterval(timer);
+			window.removeEventListener('popstate', onPopState);
+		};
 	});
 
 	function persist(): void {
 		if (mounted) saveAppState(localStorage, appState);
 	}
 
+	function enterChecklistFromUrl(replaceHistory: boolean): void {
+		const checklistId = checklistIdFromSearch(window.location.search, appState.checklists);
+		const checklist = appState.checklists.find((item) => item.id === checklistId);
+
+		if (checklist) {
+			enterChecklist(checklist, false);
+			if (replaceHistory) updateChecklistQuery(directLinkValue(checklist), true);
+			return;
+		}
+
+		mode = 'manage';
+		selectedChecklistId = null;
+		const params = new URLSearchParams(window.location.search);
+		if ((params.has(DIRECT_LINK_PARAM) || params.has(LEGACY_DIRECT_LINK_PARAM)) && replaceHistory) {
+			updateChecklistQuery(null, true);
+		}
+	}
+
+	function updateChecklistQuery(checklistValue: string | null, replace = false): void {
+		if (!mounted) return;
+
+		const url = new URL(window.location.href);
+		url.searchParams.delete(LEGACY_DIRECT_LINK_PARAM);
+		if (checklistValue) {
+			url.searchParams.set(DIRECT_LINK_PARAM, checklistValue);
+		} else {
+			url.searchParams.delete(DIRECT_LINK_PARAM);
+		}
+
+		const method = replace ? 'replaceState' : 'pushState';
+		window.history[method]({}, '', url);
+	}
+
+	function checklistUrl(checklist: Checklist): string {
+		const url = new URL(window.location.href);
+		url.searchParams.delete(LEGACY_DIRECT_LINK_PARAM);
+		url.searchParams.set(DIRECT_LINK_PARAM, directLinkValue(checklist));
+
+		const search = url.searchParams.toString();
+		if (url.pathname === '/') return `${url.origin}?${search}`;
+		return `${url.origin}${url.pathname}?${search}`;
+	}
+
+	async function copyChecklistLink(checklist: Checklist): Promise<void> {
+		copyFeedback = '';
+		await navigator.clipboard.writeText(checklistUrl(checklist));
+		copyFeedback = `Copied link for "${checklist.name}".`;
+	}
+
+	function exportDefinition(checklist: Checklist): void {
+		importFeedback = '';
+		const portable = exportPortableChecklist(checklist);
+		const blob = new Blob([JSON.stringify(portable, null, 2)], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `${filenameSlug(checklist.name)}-checklist.json`;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function openImportPicker(): void {
+		importInput?.click();
+	}
+
+	async function importDefinitions(event: Event): Promise<void> {
+		importFeedback = '';
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+
+		const result = importPortableChecklists(await file.text(), {
+			allowDevFrequencies: import.meta.env.DEV
+		});
+
+		if (!result.ok) {
+			importFeedback = result.error;
+			return;
+		}
+
+		const conflict = linkKeyConflict(appState.checklists, result.checklist.linkKey);
+		if (conflict) {
+			editingChecklist = result.checklist;
+			editingErrors = {
+				linkKey: `This link key is already used by "${conflict.name}".`
+			};
+			importFeedback = 'Imported checklist needs a unique link key before it can be saved.';
+			return;
+		}
+
+		appState.checklists = [...appState.checklists, result.checklist];
+		importFeedback = `Imported "${result.checklist.name}".`;
+		persist();
+	}
+
 	function createChecklist(): void {
+		editingErrors = {};
 		editingChecklist = {
 			id: createId(),
 			name: '',
@@ -80,20 +205,37 @@
 	}
 
 	function editChecklist(checklist: Checklist): void {
+		editingErrors = {};
 		editingChecklist = cloneChecklist(checklist);
 	}
 
 	function saveChecklist(): void {
 		if (!editingChecklist) return;
 
+		const linkKey = normalizeLinkKey(editingChecklist.linkKey);
+		const conflict = linkKeyConflict(appState.checklists, linkKey, editingChecklist.id);
+		if (conflict) {
+			editingErrors = {
+				linkKey: `This link key is already used by "${conflict.name}".`
+			};
+			return;
+		}
+
 		const checklist: Checklist = {
 			...cloneChecklist(editingChecklist),
 			name: editingChecklist.name.trim() || 'Untitled checklist',
 			description: editingChecklist.description.trim(),
+			linkKey,
 			sections: editingChecklist.sections.map((section) => ({
 				...section,
 				name: section.name.trim() || 'Untitled section',
-				schedule: normalizeSchedule(section.schedule),
+				schedule: normalizeSchedule(section.schedule, {
+					allowDevFrequencies: import.meta.env.DEV
+				}) ?? {
+					frequency: 'daily',
+					resetTimeUtc: '05:00',
+					timeMode: 'utc'
+				},
 				tasks: section.tasks.map((task) => ({
 					...task,
 					title: task.title.trim() || 'Untitled task',
@@ -113,6 +255,7 @@
 
 		cleanupCompletions(checklist);
 		editingChecklist = null;
+		editingErrors = {};
 		persist();
 	}
 
@@ -128,22 +271,25 @@
 		if (selectedChecklistId === checklist.id) {
 			selectedChecklistId = null;
 			mode = 'manage';
+			updateChecklistQuery(null);
 		}
 		if (editingChecklist?.id === checklist.id) editingChecklist = null;
 		persist();
 	}
 
-	function enterChecklist(checklist: Checklist): void {
+	function enterChecklist(checklist: Checklist, updateUrl = true): void {
 		selectedChecklistId = checklist.id;
 		mode = 'view';
 		editingChecklist = null;
 		now = new Date();
+		if (updateUrl) updateChecklistQuery(directLinkValue(checklist));
 	}
 
 	function backToManage(): void {
 		mode = 'manage';
 		selectedChecklistId = null;
 		now = new Date();
+		updateChecklistQuery(null);
 	}
 
 	function addStarterTemplate(): void {
@@ -151,6 +297,7 @@
 			id: createId(),
 			name: 'NTE Recurring Checklist',
 			description: 'Daily, weekly, and bi-weekly operating checks with UTC reset windows.',
+			linkKey: 'NTE',
 			sections: [
 				{
 					...createSection('Daily', 'daily'),
@@ -178,6 +325,16 @@
 				}
 			]
 		};
+
+		const conflict = linkKeyConflict(appState.checklists, checklist.linkKey);
+		if (conflict) {
+			editingChecklist = checklist;
+			editingErrors = {
+				linkKey: `This link key is already used by "${conflict.name}".`
+			};
+			importFeedback = 'The starter template needs a unique link key before it can be saved.';
+			return;
+		}
 
 		appState.checklists = [...appState.checklists, checklist];
 		persist();
@@ -207,15 +364,33 @@
 	}
 
 	function updateFrequency(section: ChecklistSection, frequency: Frequency): void {
-		section.schedule = normalizeSchedule({
+		section.schedule =
+			normalizeSchedule(
+				{
+					...section.schedule,
+					frequency,
+					resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
+					anchorDate:
+						frequency === 'biweekly'
+							? alignDateToWeekday(section.schedule.anchorDate ?? todayUtc(), 'monday')
+							: undefined
+				},
+				{ allowDevFrequencies: import.meta.env.DEV }
+			) ?? section.schedule;
+	}
+
+	function updateScheduleTimeMode(section: ChecklistSection, timeMode: ScheduleTimeMode): void {
+		section.schedule = {
 			...section.schedule,
-			frequency,
-			resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
-			anchorDate:
-				frequency === 'biweekly'
-					? alignDateToWeekday(section.schedule.anchorDate ?? todayUtc(), 'monday')
-					: undefined
-		});
+			timeMode
+		};
+	}
+
+	function updateScheduleInputTime(section: ChecklistSection, time: string): void {
+		section.schedule = {
+			...section.schedule,
+			resetTimeUtc: scheduleInputTimeToUtc(time, section.schedule.timeMode ?? 'utc', now)
+		};
 	}
 
 	function updateResetWeekday(section: ChecklistSection, resetWeekday: Weekday): void {
@@ -276,15 +451,23 @@
 		return {
 			id: createId(),
 			name,
-			schedule: normalizeSchedule({
-				frequency,
+			schedule: normalizeSchedule(
+				{
+					frequency,
+					resetTimeUtc: '05:00',
+					timeMode: 'utc',
+					resetWeekday,
+					anchorDate:
+						frequency === 'biweekly'
+							? alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')
+							: undefined
+				},
+				{ allowDevFrequencies: import.meta.env.DEV }
+			) ?? {
+				frequency: 'daily',
 				resetTimeUtc: '05:00',
-				resetWeekday,
-				anchorDate:
-					frequency === 'biweekly'
-						? alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')
-						: undefined
-			}),
+				timeMode: 'utc'
+			},
 			tasks: [createTask('New task')]
 		};
 	}
@@ -297,38 +480,9 @@
 		};
 	}
 
-	function normalizeSchedule(schedule: ChecklistSection['schedule']): ChecklistSection['schedule'] {
-		const resetTimeUtc = /^\d{2}:\d{2}$/.test(schedule.resetTimeUtc)
-			? schedule.resetTimeUtc
-			: '05:00';
-
-		const resetWeekday =
-			schedule.frequency === 'weekly' || schedule.frequency === 'biweekly'
-				? (schedule.resetWeekday ?? 'monday')
-				: undefined;
-
-		return {
-			frequency: schedule.frequency,
-			resetTimeUtc,
-			resetWeekday,
-			anchorDate:
-				schedule.frequency === 'biweekly'
-					? alignDateToWeekday(schedule.anchorDate ?? todayUtc(), resetWeekday ?? 'monday')
-					: undefined
-		};
-	}
-
-	function normalizeAppState(state: AppState): AppState {
-		return {
-			...state,
-			checklists: state.checklists.map((checklist) => ({
-				...checklist,
-				sections: checklist.sections.map((section) => ({
-					...section,
-					schedule: normalizeSchedule(section.schedule)
-				}))
-			}))
-		};
+	function cancelEditing(): void {
+		editingChecklist = null;
+		editingErrors = {};
 	}
 
 	function cleanupCompletions(checklist: Checklist): void {
@@ -360,47 +514,14 @@
 		);
 	}
 
-	function todayUtc(): string {
-		return new Date().toISOString().slice(0, 10);
-	}
-
-	function alignDateToWeekday(dateValue: string, weekday: Weekday): string {
-		const date = parseUtcDateInput(dateValue) ?? parseUtcDateInput(todayUtc());
-		if (!date) return todayUtc();
-
-		const weekdayIndex = weekdays.indexOf(weekday);
-		const daysToAdd = (weekdayIndex - date.getUTCDay() + 7) % 7;
-		date.setUTCDate(date.getUTCDate() + daysToAdd);
-
-		return date.toISOString().slice(0, 10);
-	}
-
-	function dateInputMinForWeekday(weekday: Weekday): string {
-		return alignDateToWeekday('1970-01-01', weekday);
-	}
-
-	function parseUtcDateInput(dateValue: string): Date | null {
-		const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
-		if (!match) return null;
-
-		const year = Number(match[1]);
-		const month = Number(match[2]) - 1;
-		const day = Number(match[3]);
-		const date = new Date(Date.UTC(year, month, day));
-
-		if (
-			date.getUTCFullYear() !== year ||
-			date.getUTCMonth() !== month ||
-			date.getUTCDate() !== day
-		) {
-			return null;
-		}
-
-		return date;
-	}
-
-	function titleCase(value: string): string {
-		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+	function filenameSlug(value: string): string {
+		return (
+			value
+				.trim()
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-')
+				.replace(/^-|-$/g, '') || 'checklist'
+		);
 	}
 </script>
 
@@ -426,6 +547,17 @@
 					<h1 class="text-3xl font-semibold tracking-normal text-surface-50">Manage Checklists</h1>
 				</div>
 				<div class="flex flex-col gap-2 sm:flex-row">
+					<input
+						bind:this={importInput}
+						class="hidden"
+						type="file"
+						accept="application/json,.json"
+						onchange={importDefinitions}
+					/>
+					<button class="btn preset-tonal-surface" type="button" onclick={openImportPicker}>
+						<Upload size={18} aria-hidden="true" />
+						Import
+					</button>
 					<button class="btn preset-tonal-surface" type="button" onclick={addStarterTemplate}>
 						<RotateCcw size={18} aria-hidden="true" />
 						NTE Template
@@ -436,6 +568,14 @@
 					</button>
 				</div>
 			</header>
+
+			{#if importFeedback || copyFeedback}
+				<p
+					class="rounded-base border border-surface-800 bg-surface-900 px-3 py-2 text-sm text-surface-300"
+				>
+					{importFeedback || copyFeedback}
+				</p>
+			{/if}
 
 			<div class="flex flex-col gap-6">
 				<section class="min-w-0">
@@ -455,7 +595,7 @@
 							class="overflow-hidden rounded-container border border-surface-800 bg-surface-900 shadow-sm"
 						>
 							<div
-								class="hidden grid-cols-[minmax(220px,1fr)_120px_100px_220px] gap-4 border-b border-surface-800 bg-surface-800 px-4 py-3 text-xs font-semibold uppercase text-surface-300 md:grid"
+								class="hidden grid-cols-[minmax(220px,1fr)_120px_100px_260px] gap-4 border-b border-surface-800 bg-surface-800 px-4 py-3 text-xs font-semibold uppercase text-surface-300 md:grid"
 							>
 								<span>Checklist</span>
 								<span>Sections</span>
@@ -465,7 +605,7 @@
 							<div class="divide-y divide-surface-800">
 								{#each appState.checklists as checklist (checklist.id)}
 									<article
-										class="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1fr)_120px_100px_220px] md:items-center"
+										class="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1fr)_120px_100px_260px] md:items-center"
 									>
 										<div class="min-w-0">
 											<h2 class="truncate text-base font-semibold text-surface-50">
@@ -491,6 +631,24 @@
 											>
 												<DoorOpen size={16} aria-hidden="true" />
 												Enter
+											</button>
+											<button
+												class="btn-icon btn-icon-sm preset-tonal-surface"
+												type="button"
+												title="Copy direct link"
+												aria-label="Copy direct link"
+												onclick={() => copyChecklistLink(checklist)}
+											>
+												<Copy size={16} aria-hidden="true" />
+											</button>
+											<button
+												class="btn-icon btn-icon-sm preset-tonal-surface"
+												type="button"
+												title="Export checklist"
+												aria-label="Export checklist"
+												onclick={() => exportDefinition(checklist)}
+											>
+												<Download size={16} aria-hidden="true" />
 											</button>
 											<button
 												class="btn-icon btn-icon-sm preset-tonal-surface"
@@ -531,7 +689,7 @@
 									type="button"
 									title="Cancel editing"
 									aria-label="Cancel editing"
-									onclick={() => (editingChecklist = null)}
+									onclick={cancelEditing}
 								>
 									x
 								</button>
@@ -553,6 +711,24 @@
 									bind:value={editingChecklist.description}
 									rows="3"
 									placeholder="Short description"></textarea>
+							</label>
+
+							<label class="label">
+								<span class="label-text">Direct link key</span>
+								<input
+									class={`input ${editingErrors.linkKey ? 'border-error-500' : ''}`}
+									bind:value={editingChecklist.linkKey}
+									placeholder="Optional, for example NTE"
+									oninput={() => (editingErrors.linkKey = undefined)}
+								/>
+								<span
+									class={editingErrors.linkKey
+										? 'text-xs text-error-400'
+										: 'text-xs text-surface-400'}
+								>
+									{editingErrors.linkKey ||
+										`Used in links as ?${DIRECT_LINK_PARAM}=value. Matching is case-insensitive.`}
+								</span>
 							</label>
 
 							<div class="flex items-center justify-between gap-3 border-t border-surface-800 pt-4">
@@ -597,14 +773,46 @@
 												</select>
 											</label>
 
-											<label class="label">
-												<span class="label-text">Reset time UTC</span>
+											<div class="label">
+												<span class="label-text">Reset time</span>
+												<div
+													class="grid grid-cols-2 overflow-hidden rounded-base border border-surface-700"
+												>
+													<button
+														class={`btn btn-sm rounded-none ${
+															(section.schedule.timeMode ?? 'utc') === 'local'
+																? 'preset-filled-primary-500'
+																: 'preset-tonal-surface'
+														}`}
+														type="button"
+														onclick={() => updateScheduleTimeMode(section, 'local')}
+													>
+														Local time
+													</button>
+													<button
+														class={`btn btn-sm rounded-none ${
+															(section.schedule.timeMode ?? 'utc') === 'utc'
+																? 'preset-filled-primary-500'
+																: 'preset-tonal-surface'
+														}`}
+														type="button"
+														onclick={() => updateScheduleTimeMode(section, 'utc')}
+													>
+														UTC
+													</button>
+												</div>
 												<input
 													class="input"
 													type="time"
-													bind:value={section.schedule.resetTimeUtc}
+													value={scheduleInputTime(section.schedule, now)}
+													onchange={(event) =>
+														updateScheduleInputTime(section, event.currentTarget.value)}
 												/>
-											</label>
+												<span class="text-xs text-surface-400">
+													Local {scheduleInputTime({ ...section.schedule, timeMode: 'local' }, now)}
+													/ UTC {section.schedule.resetTimeUtc}
+												</span>
+											</div>
 										</div>
 
 										{#if section.schedule.frequency === 'weekly' || section.schedule.frequency === 'biweekly'}
@@ -650,11 +858,11 @@
 										>
 											<div>
 												<span class="font-medium text-surface-100">Previous reset:</span>
-												{formatUtcReset(getResetWindowStart(section.schedule, now))}
+												{formatResetPair(getResetWindowStart(section.schedule, now))}
 											</div>
 											<div>
 												<span class="font-medium text-surface-100">Next reset:</span>
-												{formatUtcReset(getNextReset(section.schedule, now))}
+												{formatResetPair(getNextReset(section.schedule, now))}
 											</div>
 										</div>
 
@@ -710,11 +918,7 @@
 							</div>
 
 							<div class="flex justify-end gap-2 border-t border-surface-800 pt-4">
-								<button
-									class="btn preset-tonal-surface"
-									type="button"
-									onclick={() => (editingChecklist = null)}
-								>
+								<button class="btn preset-tonal-surface" type="button" onclick={cancelEditing}>
 									Cancel
 								</button>
 								<button class="btn preset-filled-success-500" type="button" onclick={saveChecklist}>
@@ -756,7 +960,10 @@
 								<h2 class="text-xl font-semibold text-surface-50">{section.name}</h2>
 								<p class="mt-1 text-sm text-surface-400">{describeSchedule(section.schedule)}</p>
 								<p class="mt-1 text-sm text-surface-400">
-									Next reset: {formatUtcReset(getNextReset(section.schedule, now))}
+									Next reset local: {formatLocalReset(getNextReset(section.schedule, now))}
+								</p>
+								<p class="mt-1 text-sm text-surface-400">
+									Next reset UTC: {formatUtcReset(getNextReset(section.schedule, now))}
 								</p>
 							</div>
 							<div class="flex flex-wrap items-center gap-2">

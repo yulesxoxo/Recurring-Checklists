@@ -1,6 +1,11 @@
 export const STORAGE_KEY = 'recurring-checklists:v1';
+export const DIRECT_LINK_PARAM = 'c';
+export const LEGACY_DIRECT_LINK_PARAM = 'checklist';
 
-export type Frequency = 'daily' | 'weekly' | 'biweekly';
+export type BaseFrequency = 'daily' | 'weekly' | 'biweekly';
+export type DevFrequency = 'hourly' | 'minutely';
+export type Frequency = BaseFrequency | DevFrequency;
+export type ScheduleTimeMode = 'local' | 'utc';
 export type Weekday =
 	| 'sunday'
 	| 'monday'
@@ -13,6 +18,7 @@ export type Weekday =
 export type RecurringSchedule = {
 	frequency: Frequency;
 	resetTimeUtc: string;
+	timeMode?: ScheduleTimeMode;
 	resetWeekday?: Weekday;
 	anchorDate?: string;
 };
@@ -34,6 +40,7 @@ export type Checklist = {
 	id: string;
 	name: string;
 	description: string;
+	linkKey?: string;
 	sections: ChecklistSection[];
 };
 
@@ -49,7 +56,50 @@ export type AppState = {
 	completions: CompletionState;
 };
 
+export type PortableChecklistExport = {
+	version: 1;
+	checklist: {
+		name: string;
+		description: string;
+		linkKey?: string;
+		sections: Array<{
+			name: string;
+			schedule: RecurringSchedule;
+			tasks: Array<{
+				title: string;
+				notes?: string;
+			}>;
+		}>;
+	};
+};
+
+export type ChecklistParseOptions = {
+	allowDevFrequencies?: boolean;
+};
+
+export type ImportPortableChecklistsOptions = ChecklistParseOptions & {
+	idFactory?: () => string;
+};
+
+export type ImportPortableChecklistsResult =
+	| { ok: true; checklist: Checklist }
+	| { ok: false; error: string };
+
+export const productionFrequencies: BaseFrequency[] = ['daily', 'weekly', 'biweekly'];
+export const devFrequencies: DevFrequency[] = ['hourly', 'minutely'];
+export const weekdays: Weekday[] = [
+	'sunday',
+	'monday',
+	'tuesday',
+	'wednesday',
+	'thursday',
+	'friday',
+	'saturday'
+];
+
 const dayMs = 24 * 60 * 60 * 1000;
+const hourMs = 60 * 60 * 1000;
+const minuteMs = 60 * 1000;
 const weekdayIndex: Record<Weekday, number> = {
 	sunday: 0,
 	monday: 1,
@@ -68,13 +118,13 @@ export function createEmptyAppState(): AppState {
 	};
 }
 
-export function loadAppState(storage: Storage): AppState {
+export function loadAppState(storage: Storage, options: ChecklistParseOptions = {}): AppState {
 	const stored = storage.getItem(STORAGE_KEY);
 	if (!stored) return createEmptyAppState();
 
 	try {
 		const parsed: unknown = JSON.parse(stored);
-		return isAppState(parsed) ? parsed : createEmptyAppState();
+		return normalizeAppState(parsed, options) ?? createEmptyAppState();
 	} catch {
 		return createEmptyAppState();
 	}
@@ -82,6 +132,57 @@ export function loadAppState(storage: Storage): AppState {
 
 export function saveAppState(storage: Storage, state: AppState): void {
 	storage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+export function normalizeAppState(
+	value: unknown,
+	options: ChecklistParseOptions = {}
+): AppState | null {
+	if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.checklists)) return null;
+
+	const completions = isRecord(value.completions)
+		? (value.completions as CompletionState)
+		: createEmptyAppState().completions;
+
+	return {
+		version: 1,
+		checklists: value.checklists
+			.map((checklist) => normalizeChecklist(checklist, options))
+			.filter((checklist): checklist is Checklist => checklist !== null),
+		completions
+	};
+}
+
+export function normalizeSchedule(
+	value: unknown,
+	options: ChecklistParseOptions = {}
+): RecurringSchedule | null {
+	if (!isRecord(value) || !isFrequency(value.frequency, options)) return null;
+
+	const frequency = value.frequency;
+	const resetTimeUtc =
+		typeof value.resetTimeUtc === 'string' ? normalizeResetTime(value.resetTimeUtc) : '05:00';
+	const timeMode = isScheduleTimeMode(value.timeMode) ? value.timeMode : 'utc';
+	const resetWeekday =
+		frequency === 'weekly' || frequency === 'biweekly'
+			? isWeekday(value.resetWeekday)
+				? value.resetWeekday
+				: 'monday'
+			: undefined;
+
+	return {
+		frequency,
+		resetTimeUtc,
+		timeMode,
+		resetWeekday,
+		anchorDate:
+			frequency === 'biweekly'
+				? alignDateToWeekday(
+						typeof value.anchorDate === 'string' ? value.anchorDate : todayUtc(),
+						resetWeekday ?? 'monday'
+					)
+				: undefined
+	};
 }
 
 export function countTasks(checklist: Checklist): number {
@@ -113,6 +214,23 @@ export function isTaskComplete(
 export function getResetWindowStart(schedule: RecurringSchedule, now = new Date()): Date | null {
 	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
 
+	if (schedule.frequency === 'minutely') {
+		return new Date(Math.floor(now.getTime() / minuteMs) * minuteMs);
+	}
+
+	if (schedule.frequency === 'hourly') {
+		const candidate = new Date(
+			Date.UTC(
+				now.getUTCFullYear(),
+				now.getUTCMonth(),
+				now.getUTCDate(),
+				now.getUTCHours(),
+				minutes
+			)
+		);
+		return candidate > now ? new Date(candidate.getTime() - hourMs) : candidate;
+	}
+
 	if (schedule.frequency === 'daily') {
 		const candidate = new Date(
 			Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes)
@@ -132,6 +250,10 @@ export function getNextReset(schedule: RecurringSchedule, now = new Date()): Dat
 	if (!windowStart) return null;
 
 	switch (schedule.frequency) {
+		case 'minutely':
+			return new Date(windowStart.getTime() + minuteMs);
+		case 'hourly':
+			return new Date(windowStart.getTime() + hourMs);
 		case 'daily':
 			return addDays(windowStart, 1);
 		case 'weekly':
@@ -143,14 +265,20 @@ export function getNextReset(schedule: RecurringSchedule, now = new Date()): Dat
 
 export function describeSchedule(schedule: RecurringSchedule): string {
 	const time = normalizeResetTime(schedule.resetTimeUtc);
+	const local = utcTimeToLocalTime(time);
+	const enteredAs = schedule.timeMode === 'local' ? `, entered as ${local} local time` : '';
 
 	switch (schedule.frequency) {
+		case 'minutely':
+			return 'Resets every minute';
+		case 'hourly':
+			return `Resets hourly at minute ${time.slice(3)} UTC${enteredAs}`;
 		case 'daily':
-			return `Resets daily at ${time} UTC`;
+			return `Resets daily at ${time} UTC${enteredAs}`;
 		case 'weekly':
-			return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
+			return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC${enteredAs}`;
 		case 'biweekly':
-			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
+			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC${enteredAs}`;
 	}
 }
 
@@ -169,6 +297,301 @@ export function formatUtcReset(date: Date | null): string {
 	});
 
 	return formatter.format(date);
+}
+
+export function formatLocalReset(date: Date | null): string {
+	if (!date) return 'Not scheduled';
+
+	const formatter = new Intl.DateTimeFormat('en-US', {
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: false,
+		timeZoneName: 'short'
+	});
+
+	return formatter.format(date);
+}
+
+export function formatResetPair(date: Date | null): string {
+	return `Local: ${formatLocalReset(date)} | UTC: ${formatUtcReset(date)}`;
+}
+
+export function utcTimeToLocalTime(time: string, reference = new Date()): string {
+	const { hours, minutes } = parseResetTime(time);
+	const utcDate = new Date(
+		Date.UTC(
+			reference.getUTCFullYear(),
+			reference.getUTCMonth(),
+			reference.getUTCDate(),
+			hours,
+			minutes
+		)
+	);
+
+	return formatTimeParts(utcDate.getHours(), utcDate.getMinutes());
+}
+
+export function localTimeToUtcTime(time: string, reference = new Date()): string {
+	const { hours, minutes } = parseResetTime(time);
+	const localDate = new Date(
+		reference.getFullYear(),
+		reference.getMonth(),
+		reference.getDate(),
+		hours,
+		minutes
+	);
+
+	return formatTimeParts(localDate.getUTCHours(), localDate.getUTCMinutes());
+}
+
+export function scheduleInputTime(schedule: RecurringSchedule, reference = new Date()): string {
+	return schedule.timeMode === 'local'
+		? utcTimeToLocalTime(schedule.resetTimeUtc, reference)
+		: normalizeResetTime(schedule.resetTimeUtc);
+}
+
+export function scheduleInputTimeToUtc(
+	time: string,
+	timeMode: ScheduleTimeMode,
+	reference = new Date()
+): string {
+	return timeMode === 'local' ? localTimeToUtcTime(time, reference) : normalizeResetTime(time);
+}
+
+export function exportPortableChecklist(checklist: Checklist): PortableChecklistExport {
+	return {
+		version: 1,
+		checklist: {
+			name: checklist.name,
+			description: checklist.description,
+			...(checklist.linkKey ? { linkKey: checklist.linkKey } : {}),
+			sections: checklist.sections.map((section) => ({
+				name: section.name,
+				schedule: { ...section.schedule },
+				tasks: section.tasks.map((task) => ({
+					title: task.title,
+					...(task.notes ? { notes: task.notes } : {})
+				}))
+			}))
+		}
+	};
+}
+
+export function checklistIdFromSearch(search: string, checklists: Checklist[]): string | null {
+	const params = new URLSearchParams(search);
+	const directValue = params.get(DIRECT_LINK_PARAM) ?? params.get(LEGACY_DIRECT_LINK_PARAM);
+	if (!directValue) return null;
+
+	const directValueLower = directValue.toLowerCase();
+	const checklist = checklists.find(
+		(item) => item.id === directValue || item.linkKey?.toLowerCase() === directValueLower
+	);
+	return checklist?.id ?? null;
+}
+
+export function directLinkValue(checklist: Checklist): string {
+	return checklist.linkKey || checklist.id;
+}
+
+export function normalizeLinkKey(value: unknown): string | undefined {
+	if (typeof value !== 'string') return undefined;
+
+	const trimmed = value.trim();
+	return trimmed || undefined;
+}
+
+export function linkKeyConflict(
+	checklists: Checklist[],
+	linkKey: string | undefined,
+	currentChecklistId?: string
+): Checklist | null {
+	if (!linkKey) return null;
+
+	const linkKeyLower = linkKey.toLowerCase();
+	return (
+		checklists.find(
+			(checklist) =>
+				checklist.id !== currentChecklistId && checklist.linkKey?.toLowerCase() === linkKeyLower
+		) ?? null
+	);
+}
+
+export function importPortableChecklists(
+	json: string,
+	options: ImportPortableChecklistsOptions = {}
+): ImportPortableChecklistsResult {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(json);
+	} catch {
+		return { ok: false, error: 'Import file is not valid JSON.' };
+	}
+
+	if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.checklist)) {
+		return { ok: false, error: 'Import must contain one version 1 checklist.' };
+	}
+
+	const idFactory = options.idFactory ?? createId;
+
+	const checklist = parsed.checklist;
+	if (typeof checklist.name !== 'string' || typeof checklist.description !== 'string') {
+		return { ok: false, error: 'Checklist is missing text fields.' };
+	}
+
+	if (checklist.linkKey !== undefined && typeof checklist.linkKey !== 'string') {
+		return { ok: false, error: 'Checklist link key must be text.' };
+	}
+
+	if (!Array.isArray(checklist.sections)) {
+		return { ok: false, error: `Checklist "${checklist.name}" has no sections array.` };
+	}
+
+	const sections: ChecklistSection[] = [];
+	for (const [sectionIndex, section] of checklist.sections.entries()) {
+		if (!isRecord(section) || typeof section.name !== 'string' || !Array.isArray(section.tasks)) {
+			return {
+				ok: false,
+				error: `Section ${sectionIndex + 1} in "${checklist.name}" is malformed.`
+			};
+		}
+
+		const schedule = normalizePortableSchedule(section.schedule, options);
+		if (!schedule) {
+			return {
+				ok: false,
+				error: `Section "${section.name}" has an unsupported or malformed schedule.`
+			};
+		}
+
+		const tasks: ChecklistTask[] = [];
+		for (const [taskIndex, task] of section.tasks.entries()) {
+			if (
+				!isRecord(task) ||
+				typeof task.title !== 'string' ||
+				(task.notes !== undefined && typeof task.notes !== 'string')
+			) {
+				return {
+					ok: false,
+					error: `Task ${taskIndex + 1} in section "${section.name}" is malformed.`
+				};
+			}
+
+			tasks.push({
+				id: idFactory(),
+				title: task.title.trim() || 'Untitled task',
+				notes: task.notes?.trim() || undefined
+			});
+		}
+
+		sections.push({
+			id: idFactory(),
+			name: section.name.trim() || 'Untitled section',
+			schedule,
+			tasks
+		});
+	}
+
+	return {
+		ok: true,
+		checklist: {
+			id: idFactory(),
+			name: checklist.name.trim() || 'Untitled checklist',
+			description: checklist.description.trim(),
+			linkKey: normalizeLinkKey(checklist.linkKey),
+			sections
+		}
+	};
+}
+
+export function todayUtc(): string {
+	return new Date().toISOString().slice(0, 10);
+}
+
+export function alignDateToWeekday(dateValue: string, weekday: Weekday): string {
+	const date = parseUtcDateInput(dateValue) ?? parseUtcDateInput(todayUtc());
+	if (!date) return todayUtc();
+
+	const daysToAdd = (weekdayIndex[weekday] - date.getUTCDay() + 7) % 7;
+	date.setUTCDate(date.getUTCDate() + daysToAdd);
+
+	return date.toISOString().slice(0, 10);
+}
+
+export function dateInputMinForWeekday(weekday: Weekday): string {
+	return alignDateToWeekday('1970-01-01', weekday);
+}
+
+export function titleCase(value: string): string {
+	return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+}
+
+function normalizeChecklist(value: unknown, options: ChecklistParseOptions): Checklist | null {
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string')
+		return null;
+
+	const sections = Array.isArray(value.sections)
+		? value.sections
+				.map((section) => normalizeSection(section, options))
+				.filter((section): section is ChecklistSection => section !== null)
+		: [];
+
+	return {
+		id: value.id,
+		name: value.name,
+		description: typeof value.description === 'string' ? value.description : '',
+		linkKey: normalizeLinkKey(value.linkKey),
+		sections
+	};
+}
+
+function normalizeSection(value: unknown, options: ChecklistParseOptions): ChecklistSection | null {
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string')
+		return null;
+
+	const schedule = normalizeSchedule(value.schedule, options);
+	if (!schedule) return null;
+
+	return {
+		id: value.id,
+		name: value.name,
+		schedule,
+		tasks: Array.isArray(value.tasks)
+			? value.tasks.map(normalizeTask).filter((task): task is ChecklistTask => task !== null)
+			: []
+	};
+}
+
+function normalizeTask(value: unknown): ChecklistTask | null {
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string')
+		return null;
+
+	return {
+		id: value.id,
+		title: value.title,
+		notes: typeof value.notes === 'string' ? value.notes : undefined
+	};
+}
+
+function normalizePortableSchedule(
+	value: unknown,
+	options: ChecklistParseOptions
+): RecurringSchedule | null {
+	if (!isRecord(value) || !isFrequency(value.frequency, options)) return null;
+	if (typeof value.resetTimeUtc !== 'string' || !isValidResetTime(value.resetTimeUtc)) return null;
+	if (value.timeMode !== undefined && !isScheduleTimeMode(value.timeMode)) return null;
+
+	if (value.frequency === 'weekly' || value.frequency === 'biweekly') {
+		if (value.resetWeekday !== undefined && !isWeekday(value.resetWeekday)) return null;
+	}
+
+	if (value.frequency === 'biweekly') {
+		if (typeof value.anchorDate !== 'string' || !parseUtcDateInput(value.anchorDate)) return null;
+	}
+
+	return normalizeSchedule(value, options);
 }
 
 function getWeeklyWindowStart(schedule: RecurringSchedule, now: Date, intervalDays: 7): Date {
@@ -214,17 +637,35 @@ function parseResetTime(time: string): { hours: number; minutes: number } {
 
 function normalizeResetTime(time: string): string {
 	const { hours, minutes } = parseResetTime(time);
-	return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+	return formatTimeParts(hours, minutes);
+}
+
+function isValidResetTime(time: string): boolean {
+	const match = /^(\d{2}):(\d{2})$/.exec(time);
+	if (!match) return false;
+
+	const hours = Number(match[1]);
+	const minutes = Number(match[2]);
+
+	return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
 }
 
 function parseAnchorDate(anchorDate: string, hours: number, minutes: number): Date | null {
-	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(anchorDate);
+	const date = parseUtcDateInput(anchorDate);
+	if (!date) return null;
+
+	date.setUTCHours(hours, minutes, 0, 0);
+	return date;
+}
+
+function parseUtcDateInput(dateValue: string): Date | null {
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
 	if (!match) return null;
 
 	const year = Number(match[1]);
 	const month = Number(match[2]) - 1;
 	const day = Number(match[3]);
-	const date = new Date(Date.UTC(year, month, day, hours, minutes));
+	const date = new Date(Date.UTC(year, month, day));
 
 	if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) {
 		return null;
@@ -237,64 +678,27 @@ function addDays(date: Date, days: number): Date {
 	return new Date(date.getTime() + days * dayMs);
 }
 
-function titleCase(value: string): string {
-	return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+function formatTimeParts(hours: number, minutes: number): string {
+	return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
-function isAppState(value: unknown): value is AppState {
-	if (!isRecord(value)) return false;
-
+function createId(): string {
 	return (
-		value.version === 1 &&
-		Array.isArray(value.checklists) &&
-		isRecord(value.completions) &&
-		value.checklists.every(isChecklist)
+		globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`
 	);
 }
 
-function isChecklist(value: unknown): value is Checklist {
+function isFrequency(value: unknown, options: ChecklistParseOptions): value is Frequency {
 	return (
-		isRecord(value) &&
-		typeof value.id === 'string' &&
-		typeof value.name === 'string' &&
-		typeof value.description === 'string' &&
-		Array.isArray(value.sections) &&
-		value.sections.every(isSection)
+		value === 'daily' ||
+		value === 'weekly' ||
+		value === 'biweekly' ||
+		(options.allowDevFrequencies === true && (value === 'hourly' || value === 'minutely'))
 	);
 }
 
-function isSection(value: unknown): value is ChecklistSection {
-	return (
-		isRecord(value) &&
-		typeof value.id === 'string' &&
-		typeof value.name === 'string' &&
-		isSchedule(value.schedule) &&
-		Array.isArray(value.tasks) &&
-		value.tasks.every(isTask)
-	);
-}
-
-function isSchedule(value: unknown): value is RecurringSchedule {
-	return (
-		isRecord(value) &&
-		isFrequency(value.frequency) &&
-		typeof value.resetTimeUtc === 'string' &&
-		(value.resetWeekday === undefined || isWeekday(value.resetWeekday)) &&
-		(value.anchorDate === undefined || typeof value.anchorDate === 'string')
-	);
-}
-
-function isTask(value: unknown): value is ChecklistTask {
-	return (
-		isRecord(value) &&
-		typeof value.id === 'string' &&
-		typeof value.title === 'string' &&
-		(value.notes === undefined || typeof value.notes === 'string')
-	);
-}
-
-function isFrequency(value: unknown): value is Frequency {
-	return value === 'daily' || value === 'weekly' || value === 'biweekly';
+function isScheduleTimeMode(value: unknown): value is ScheduleTimeMode {
+	return value === 'local' || value === 'utc';
 }
 
 function isWeekday(value: unknown): value is Weekday {
