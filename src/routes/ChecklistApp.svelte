@@ -14,16 +14,12 @@
 		type Frequency,
 		type Weekday,
 		alignDateToWeekday,
-		allFrequencies,
 		createEmptyAppState,
 		exportPortableChecklist,
 		getResetWindowStart,
 		importPortableChecklists,
-		insertArrayItem,
 		linkKeyConflict,
 		loadAppState,
-		moveArrayItem,
-		normalizeLinkKey,
 		normalizeSchedule,
 		saveAppState,
 		todayUtc
@@ -31,14 +27,9 @@
 
 	type Mode = 'manage' | 'view';
 
-	const frequencies = allFrequencies;
-
 	let appState = $state<AppState>(createEmptyAppState());
 	let mode = $state<Mode>('manage');
 	let selectedChecklistId = $state<string | null>(null);
-	let editingChecklist = $state<Checklist | null>(null);
-	let openSectionIds = $state<string[]>([]);
-	let editingErrors = $state<{ linkKey?: string }>({});
 	let importInput = $state<HTMLInputElement>();
 	let importFeedback = $state('');
 	let copyFeedback = $state('');
@@ -90,9 +81,6 @@
 
 		mode = 'manage';
 		selectedChecklistId = null;
-		editingChecklist = null;
-		openSectionIds = [];
-		editingErrors = {};
 		const params = new URLSearchParams(window.location.search);
 		if (params.has(DIRECT_LINK_PARAM) && replaceHistory) {
 			updateChecklistQuery(null, true);
@@ -190,11 +178,7 @@
 
 		const conflict = linkKeyConflict(appState.checklists, result.checklist.linkKey);
 		if (conflict) {
-			setEditingChecklist(result.checklist);
-			editingErrors = {
-				linkKey: `This link key is already used by "${conflict.name}".`
-			};
-			importFeedback = 'Imported checklist needs a unique link key before it can be saved.';
+			importFeedback = `Imported checklist link key is already used by "${conflict.name}".`;
 			return;
 		}
 
@@ -208,58 +192,7 @@
 	}
 
 	function editChecklist(checklist: Checklist): void {
-		editingErrors = {};
-		setEditingChecklist(cloneChecklist(checklist));
-	}
-
-	function saveChecklist(): void {
-		if (!editingChecklist) return;
-
-		const linkKey = normalizeLinkKey(editingChecklist.linkKey);
-		const conflict = linkKeyConflict(appState.checklists, linkKey, editingChecklist.id);
-		if (conflict) {
-			editingErrors = {
-				linkKey: `This link key is already used by "${conflict.name}".`
-			};
-			return;
-		}
-
-		const checklist: Checklist = {
-			...cloneChecklist(editingChecklist),
-			name: editingChecklist.name.trim() || 'Untitled checklist',
-			description: editingChecklist.description.trim(),
-			linkKey,
-			sections: editingChecklist.sections.map((section) => ({
-				...section,
-				name: section.name.trim() || 'Untitled section',
-				schedule: normalizeSchedule(section.schedule, {
-					allowDevFrequencies: import.meta.env.DEV
-				}) ?? {
-					frequency: 'daily',
-					resetTimeUtc: '05:00'
-				},
-				tasks: section.tasks.map((task) => ({
-					...task,
-					title: task.title.trim() || 'Untitled task',
-					notes: task.notes?.trim() || undefined
-				}))
-			}))
-		};
-
-		const existingIndex = appState.checklists.findIndex((item) => item.id === checklist.id);
-		if (existingIndex === -1) {
-			appState.checklists = [...appState.checklists, checklist];
-		} else {
-			appState.checklists = appState.checklists.map((item) =>
-				item.id === checklist.id ? checklist : item
-			);
-		}
-
-		cleanupCompletions(checklist);
-		editingChecklist = null;
-		openSectionIds = [];
-		editingErrors = {};
-		persist();
+		void goto(`/create?edit=${encodeURIComponent(checklist.id)}`);
 	}
 
 	function deleteChecklist(checklist: Checklist): void {
@@ -276,18 +209,12 @@
 			mode = 'manage';
 			updateManagePath();
 		}
-		if (editingChecklist?.id === checklist.id) {
-			editingChecklist = null;
-			openSectionIds = [];
-		}
 		persist();
 	}
 
 	function enterChecklist(checklist: Checklist, updateUrl = true): void {
 		selectedChecklistId = checklist.id;
 		mode = 'view';
-		editingChecklist = null;
-		openSectionIds = [];
 		now = new Date();
 		if (updateUrl) updateChecklistQuery(directLinkValue(checklist));
 	}
@@ -295,9 +222,6 @@
 	function backToManage(): void {
 		mode = 'manage';
 		selectedChecklistId = null;
-		editingChecklist = null;
-		openSectionIds = [];
-		editingErrors = {};
 		now = new Date();
 		updateManagePath();
 	}
@@ -338,91 +262,12 @@
 
 		const conflict = linkKeyConflict(appState.checklists, checklist.linkKey);
 		if (conflict) {
-			setEditingChecklist(checklist);
-			editingErrors = {
-				linkKey: `This link key is already used by "${conflict.name}".`
-			};
-			importFeedback = 'The starter template needs a unique link key before it can be saved.';
+			importFeedback = `The starter template link key is already used by "${conflict.name}".`;
 			return;
 		}
 
 		appState.checklists = [...appState.checklists, checklist];
 		persist();
-	}
-
-	function addSection(position: number | undefined = undefined): void {
-		if (!editingChecklist) return;
-		const section = createSection('New section', 'daily');
-		editingChecklist.sections = insertArrayItem(editingChecklist.sections, section, position);
-		openSectionIds = [...new Set([...openSectionIds, section.id])];
-	}
-
-	function removeSection(sectionId: string): void {
-		if (!editingChecklist) return;
-		editingChecklist.sections = editingChecklist.sections.filter(
-			(section) => section.id !== sectionId
-		);
-		openSectionIds = openSectionIds.filter((id) => id !== sectionId);
-	}
-
-	function moveSection(sectionId: string, direction: -1 | 1): void {
-		if (!editingChecklist) return;
-
-		const index = editingChecklist.sections.findIndex((section) => section.id === sectionId);
-		editingChecklist.sections = moveArrayItem(editingChecklist.sections, index, direction);
-	}
-
-	function addTask(section: ChecklistSection, position: number | undefined = undefined): void {
-		section.tasks = insertArrayItem(section.tasks, createTask('New task'), position);
-	}
-
-	function removeTask(section: ChecklistSection, taskId: string): void {
-		section.tasks = section.tasks.filter((task) => task.id !== taskId);
-	}
-
-	function moveTask(section: ChecklistSection, taskId: string, direction: -1 | 1): void {
-		const index = section.tasks.findIndex((task) => task.id === taskId);
-		section.tasks = moveArrayItem(section.tasks, index, direction);
-	}
-
-	function updateFrequency(section: ChecklistSection, frequency: Frequency): void {
-		section.schedule =
-			normalizeSchedule(
-				{
-					...section.schedule,
-					frequency,
-					resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
-					anchorDate:
-						frequency === 'biweekly'
-							? alignDateToWeekday(section.schedule.anchorDate ?? todayUtc(), 'monday')
-							: undefined
-				},
-				{ allowDevFrequencies: import.meta.env.DEV }
-			) ?? section.schedule;
-	}
-
-	function updateScheduleInputTime(section: ChecklistSection, resetTimeUtc: string): void {
-		section.schedule = {
-			...section.schedule,
-			resetTimeUtc
-		};
-	}
-
-	function updateResetWeekday(section: ChecklistSection, resetWeekday: Weekday): void {
-		section.schedule.resetWeekday = resetWeekday;
-		if (section.schedule.frequency === 'biweekly') {
-			section.schedule.anchorDate = alignDateToWeekday(
-				section.schedule.anchorDate ?? todayUtc(),
-				resetWeekday
-			);
-		}
-	}
-
-	function updateAnchorDate(section: ChecklistSection, anchorDate: string): void {
-		section.schedule.anchorDate = alignDateToWeekday(
-			anchorDate,
-			section.schedule.resetWeekday ?? 'monday'
-		);
 	}
 
 	function toggleTask(section: ChecklistSection, task: ChecklistTask, checked: boolean): void {
@@ -479,11 +324,6 @@
 		};
 	}
 
-	function setEditingChecklist(checklist: Checklist): void {
-		editingChecklist = checklist;
-		openSectionIds = checklist.sections.map((section) => section.id);
-	}
-
 	function createSection(name: string, frequency: Frequency): ChecklistSection {
 		const resetWeekday = frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined;
 
@@ -515,35 +355,6 @@
 			title,
 			notes: ''
 		};
-	}
-
-	function cancelEditing(): void {
-		editingChecklist = null;
-		openSectionIds = [];
-		editingErrors = {};
-	}
-
-	function cleanupCompletions(checklist: Checklist): void {
-		const checklistCompletions = appState.completions[checklist.id];
-		if (!checklistCompletions) return;
-
-		const sectionIds = new Set(checklist.sections.map((section) => section.id));
-		for (const sectionId of Object.keys(checklistCompletions)) {
-			if (!sectionIds.has(sectionId)) {
-				delete checklistCompletions[sectionId];
-				continue;
-			}
-
-			const section = checklist.sections.find((item) => item.id === sectionId);
-			const taskIds = new Set(section?.tasks.map((task) => task.id) ?? []);
-			for (const taskId of Object.keys(checklistCompletions[sectionId])) {
-				if (!taskIds.has(taskId)) delete checklistCompletions[sectionId][taskId];
-			}
-		}
-	}
-
-	function cloneChecklist(checklist: Checklist): Checklist {
-		return JSON.parse(JSON.stringify(checklist)) as Checklist;
 	}
 
 	function createId(): string {
@@ -578,11 +389,6 @@
 			bind:importInput
 			{importFeedback}
 			{copyFeedback}
-			bind:editingChecklist
-			bind:openSectionIds
-			bind:editingErrors
-			{frequencies}
-			{now}
 			onImportDefinitions={importDefinitions}
 			onOpenImportPicker={openImportPicker}
 			onAddStarterTemplate={addStarterTemplate}
@@ -592,19 +398,6 @@
 			onExportDefinition={exportDefinition}
 			onEditChecklist={editChecklist}
 			onDeleteChecklist={deleteChecklist}
-			onAddSection={() => addSection()}
-			onRemoveSection={removeSection}
-			onMoveSection={moveSection}
-			onAddTask={addTask}
-			onRemoveTask={removeTask}
-			onMoveTask={moveTask}
-			onUpdateFrequency={updateFrequency}
-			onUpdateScheduleInputTime={updateScheduleInputTime}
-			onUpdateResetWeekday={updateResetWeekday}
-			onUpdateAnchorDate={updateAnchorDate}
-			onClearLinkKeyError={() => (editingErrors.linkKey = undefined)}
-			onCancelEditing={cancelEditing}
-			onSaveChecklist={saveChecklist}
 		/>
 	{:else if selectedChecklist}
 		<ChecklistView

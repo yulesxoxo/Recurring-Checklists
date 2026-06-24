@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { onMount } from 'svelte';
 	import { ArrowLeft } from '@lucide/svelte';
 	import ChecklistEditor from './ChecklistEditor.svelte';
@@ -28,9 +29,15 @@
 	let checklist = $state<Checklist>(initialChecklist);
 	let openSectionIds = $state<string[]>(initialChecklist.sections.map((section) => section.id));
 	let editingErrors = $state<{ linkKey?: string }>({});
+	let checklistNotFound = $state(false);
 	let now = $state(new Date());
 
+	let editChecklistId = $derived(page.url.searchParams.get('edit'));
+	let pageTitle = $derived(editChecklistId ? 'Edit Checklist' : 'Create Checklist');
+
 	onMount(() => {
+		if (editChecklistId) loadChecklistForEditing(editChecklistId);
+
 		let timer: number | undefined;
 		const delayToNextMinute = 60_000 - (Date.now() % 60_000);
 		const timeout = window.setTimeout(() => {
@@ -46,10 +53,24 @@
 		};
 	});
 
+	function loadChecklistForEditing(checklistId: string): void {
+		const appState = loadAppState(localStorage, { allowDevFrequencies: import.meta.env.DEV });
+		const existing = appState.checklists.find((item) => item.id === checklistId);
+
+		if (!existing) {
+			checklistNotFound = true;
+			return;
+		}
+
+		checklist = cloneChecklist(existing);
+		openSectionIds = checklist.sections.map((section) => section.id);
+		checklistNotFound = false;
+	}
+
 	function saveChecklist(): void {
 		const appState = loadAppState(localStorage, { allowDevFrequencies: import.meta.env.DEV });
 		const linkKey = normalizeLinkKey(checklist.linkKey);
-		const conflict = linkKeyConflict(appState.checklists, linkKey);
+		const conflict = linkKeyConflict(appState.checklists, linkKey, editChecklistId ?? checklist.id);
 		if (conflict) {
 			editingErrors = {
 				linkKey: `This link key is already used by "${conflict.name}".`
@@ -79,7 +100,16 @@
 			}))
 		};
 
-		appState.checklists = [...appState.checklists, savedChecklist];
+		const existingIndex = appState.checklists.findIndex((item) => item.id === savedChecklist.id);
+		if (existingIndex === -1) {
+			appState.checklists = [...appState.checklists, savedChecklist];
+		} else {
+			appState.checklists = appState.checklists.map((item) =>
+				item.id === savedChecklist.id ? savedChecklist : item
+			);
+			cleanupCompletions(appState, savedChecklist);
+		}
+
 		saveAppState(localStorage, appState);
 		void goto('/', { replaceState: true });
 	}
@@ -203,6 +233,25 @@
 		return JSON.parse(JSON.stringify(value)) as Checklist;
 	}
 
+	function cleanupCompletions(appState: ReturnType<typeof loadAppState>, savedChecklist: Checklist): void {
+		const checklistCompletions = appState.completions[savedChecklist.id];
+		if (!checklistCompletions) return;
+
+		const sectionIds = new Set(savedChecklist.sections.map((section) => section.id));
+		for (const sectionId of Object.keys(checklistCompletions)) {
+			if (!sectionIds.has(sectionId)) {
+				delete checklistCompletions[sectionId];
+				continue;
+			}
+
+			const section = savedChecklist.sections.find((item) => item.id === sectionId);
+			const taskIds = new Set(section?.tasks.map((task) => task.id) ?? []);
+			for (const taskId of Object.keys(checklistCompletions[sectionId])) {
+				if (!taskIds.has(taskId)) delete checklistCompletions[sectionId][taskId];
+			}
+		}
+	}
+
 	function createId(): string {
 		return (
 			globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -211,8 +260,8 @@
 </script>
 
 <svelte:head>
-	<title>Create Checklist</title>
-	<meta name="description" content="Create a recurring checklist." />
+	<title>{pageTitle}</title>
+	<meta name="description" content="Create or edit a recurring checklist." />
 </svelte:head>
 
 <main class="min-h-screen bg-surface-950 text-surface-50">
@@ -221,7 +270,7 @@
 			class="flex flex-col gap-4 border-b border-surface-800 pb-5 md:flex-row md:items-center md:justify-between"
 		>
 			<div class="min-w-0">
-				<h1 class="text-3xl font-semibold tracking-normal text-surface-50">Create Checklist</h1>
+				<h1 class="text-3xl font-semibold tracking-normal text-surface-50">{pageTitle}</h1>
 				<p class="mt-1 text-sm text-surface-400">Set up sections, tasks, and reset windows.</p>
 			</div>
 			<button
@@ -234,25 +283,34 @@
 			</button>
 		</header>
 
-		<ChecklistEditor
-			bind:checklist
-			bind:openSectionIds
-			bind:editingErrors
-			{frequencies}
-			{now}
-			onAddSection={() => addSection()}
-			onRemoveSection={removeSection}
-			onMoveSection={moveSection}
-			onAddTask={addTask}
-			onRemoveTask={removeTask}
-			onMoveTask={moveTask}
-			onUpdateFrequency={updateFrequency}
-			onUpdateScheduleInputTime={updateScheduleInputTime}
-			onUpdateResetWeekday={updateResetWeekday}
-			onUpdateAnchorDate={updateAnchorDate}
-			onClearLinkKeyError={() => (editingErrors.linkKey = undefined)}
-			onCancel={cancelEditing}
-			onSave={saveChecklist}
-		/>
+		{#if checklistNotFound}
+			<section class="rounded-container border border-surface-800 bg-surface-900 p-8 text-center">
+				<h2 class="text-xl font-semibold text-surface-50">Checklist not found</h2>
+				<p class="mt-2 text-sm text-surface-400">
+					Return to manage mode and choose an available checklist.
+				</p>
+			</section>
+		{:else}
+			<ChecklistEditor
+				bind:checklist
+				bind:openSectionIds
+				bind:editingErrors
+				{frequencies}
+				{now}
+				onAddSection={() => addSection()}
+				onRemoveSection={removeSection}
+				onMoveSection={moveSection}
+				onAddTask={addTask}
+				onRemoveTask={removeTask}
+				onMoveTask={moveTask}
+				onUpdateFrequency={updateFrequency}
+				onUpdateScheduleInputTime={updateScheduleInputTime}
+				onUpdateResetWeekday={updateResetWeekday}
+				onUpdateAnchorDate={updateAnchorDate}
+				onClearLinkKeyError={() => (editingErrors.linkKey = undefined)}
+				onCancel={cancelEditing}
+				onSave={saveChecklist}
+			/>
+		{/if}
 	</section>
 </main>

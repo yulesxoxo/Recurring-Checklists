@@ -13,25 +13,14 @@
 	import {
 		type AppState,
 		type Checklist,
-		type ChecklistSection,
-		type Frequency,
-		type Weekday,
 		countTasks
 	} from '$lib/checklists';
-	import ChecklistEditor from './create/ChecklistEditor.svelte';
-
-	type EditingErrors = { linkKey?: string };
 
 	let {
 		appState,
 		importInput = $bindable<HTMLInputElement | undefined>(),
 		importFeedback,
 		copyFeedback,
-		editingChecklist = $bindable<Checklist | null>(),
-		openSectionIds = $bindable<string[]>(),
-		editingErrors = $bindable<EditingErrors>(),
-		frequencies,
-		now,
 		onImportDefinitions,
 		onOpenImportPicker,
 		onAddStarterTemplate,
@@ -40,30 +29,12 @@
 		onCopyChecklistLink,
 		onExportDefinition,
 		onEditChecklist,
-		onDeleteChecklist,
-		onAddSection,
-		onRemoveSection,
-		onMoveSection,
-		onAddTask,
-		onRemoveTask,
-		onMoveTask,
-		onUpdateFrequency,
-		onUpdateScheduleInputTime,
-		onUpdateResetWeekday,
-		onUpdateAnchorDate,
-		onClearLinkKeyError,
-		onCancelEditing,
-		onSaveChecklist
+		onDeleteChecklist
 	}: {
 		appState: AppState;
 		importInput: HTMLInputElement | undefined;
 		importFeedback: string;
 		copyFeedback: string;
-		editingChecklist: Checklist | null;
-		openSectionIds: string[];
-		editingErrors: EditingErrors;
-		frequencies: Frequency[];
-		now: Date;
 		onImportDefinitions: (event: Event) => Promise<void>;
 		onOpenImportPicker: () => void;
 		onAddStarterTemplate: () => void;
@@ -73,19 +44,6 @@
 		onExportDefinition: (checklist: Checklist) => void;
 		onEditChecklist: (checklist: Checklist) => void;
 		onDeleteChecklist: (checklist: Checklist) => void;
-		onAddSection: () => void;
-		onRemoveSection: (sectionId: string) => void;
-		onMoveSection: (sectionId: string, direction: -1 | 1) => void;
-		onAddTask: (section: ChecklistSection) => void;
-		onRemoveTask: (section: ChecklistSection, taskId: string) => void;
-		onMoveTask: (section: ChecklistSection, taskId: string, direction: -1 | 1) => void;
-		onUpdateFrequency: (section: ChecklistSection, frequency: Frequency) => void;
-		onUpdateScheduleInputTime: (section: ChecklistSection, resetTimeUtc: string) => void;
-		onUpdateResetWeekday: (section: ChecklistSection, resetWeekday: Weekday) => void;
-		onUpdateAnchorDate: (section: ChecklistSection, anchorDate: string) => void;
-		onClearLinkKeyError: () => void;
-		onCancelEditing: () => void;
-		onSaveChecklist: () => void;
 	} = $props();
 </script>
 
@@ -229,28 +187,5 @@
 				</div>
 			{/if}
 		</section>
-
-		{#if editingChecklist}
-			<ChecklistEditor
-				bind:checklist={editingChecklist}
-				bind:openSectionIds
-				bind:editingErrors
-				{frequencies}
-				{now}
-				{onAddSection}
-				{onRemoveSection}
-				{onMoveSection}
-				{onAddTask}
-				{onRemoveTask}
-				{onMoveTask}
-				{onUpdateFrequency}
-				{onUpdateScheduleInputTime}
-				{onUpdateResetWeekday}
-				{onUpdateAnchorDate}
-				{onClearLinkKeyError}
-				onCancel={onCancelEditing}
-				onSave={onSaveChecklist}
-			/>
-		{/if}
 	</div>
 </section>
