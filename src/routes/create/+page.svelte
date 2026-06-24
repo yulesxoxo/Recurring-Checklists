@@ -303,7 +303,6 @@
 				onUpdateResetWeekday={updateResetWeekday}
 				onUpdateAnchorDate={updateAnchorDate}
 				onClearLinkKeyError={() => (editingErrors.linkKey = undefined)}
-				onCancel={cancelEditing}
 				onSave={saveChecklist}
 			/>
 		{/if}

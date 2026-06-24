@@ -44,7 +44,6 @@
 		onUpdateResetWeekday,
 		onUpdateAnchorDate,
 		onClearLinkKeyError,
-		onCancel,
 		onSave
 	}: {
 		checklist: Checklist;
@@ -63,7 +62,6 @@
 		onUpdateResetWeekday: (section: ChecklistSection, resetWeekday: Weekday) => void;
 		onUpdateAnchorDate: (section: ChecklistSection, anchorDate: string) => void;
 		onClearLinkKeyError: () => void;
-		onCancel: () => void;
 		onSave: () => void;
 	} = $props();
 
@@ -108,15 +106,6 @@
 				<h2 class="text-lg font-semibold text-surface-50">Checklist editor</h2>
 				<p class="text-sm text-surface-400">Changes save locally in this browser.</p>
 			</div>
-			<button
-				class="btn-icon btn-icon-sm preset-tonal-surface"
-				type="button"
-				title="Cancel editing"
-				aria-label="Cancel editing"
-				onclick={onCancel}
-			>
-				x
-			</button>
 		</div>
 
 		<label class="label">
@@ -421,7 +410,6 @@
 		</button>
 
 		<div class="flex justify-end gap-2 border-t border-surface-800 pt-4">
-			<button class="btn preset-tonal-surface" type="button" onclick={onCancel}>Cancel</button>
 			<button class="btn preset-filled-success-500" type="button" onclick={onSave}>
 				<Save size={18} aria-hidden="true" />
 				Save
