@@ -2,16 +2,15 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { ArrowLeft } from '@lucide/svelte';
-	import ChecklistEditor from './ChecklistEditor.svelte';
 	import ChecklistManage from './ChecklistManage.svelte';
 	import ChecklistView from './ChecklistView.svelte';
 	import {
 		DIRECT_LINK_PARAM,
 		alignDateToWeekday,
+		allFrequencies,
 		checklistIdFromSearch,
 		createEmptyAppState,
 		directLinkValue,
-		devFrequencies,
 		exportPortableChecklist,
 		getCompletion,
 		importPortableChecklists,
@@ -22,26 +21,14 @@
 		moveArrayItem,
 		normalizeLinkKey,
 		normalizeSchedule,
-		productionFrequencies,
 		saveAppState,
 		scheduleInputTimeToUtc,
-		todayUtc,
-		type AppState,
-		type Checklist,
-		type ChecklistSection,
-		type ChecklistTask,
-		type Frequency,
-		type ScheduleTimeMode,
-		type Weekday
+		todayUtc
 	} from '$lib/checklists';
 
 	type Mode = 'manage' | 'view';
 
-	let { initialCreate = false }: { initialCreate?: boolean } = $props();
-
-	const frequencies: Frequency[] = import.meta.env.DEV
-		? [...productionFrequencies, ...devFrequencies]
-		: productionFrequencies;
+	const frequencies = allFrequencies;
 
 	let appState = $state<AppState>(createEmptyAppState());
 	let mode = $state<Mode>('manage');
@@ -63,13 +50,13 @@
 		appState = loadAppState(localStorage, { allowDevFrequencies: import.meta.env.DEV });
 		mounted = true;
 		persist();
-		syncRoute(true);
+		enterChecklistFromUrl(true);
 
 		const timer = window.setInterval(() => {
 			now = new Date();
 		}, 60_000);
 
-		const onPopState = () => syncRoute(false);
+		const onPopState = () => enterChecklistFromUrl(false);
 		window.addEventListener('popstate', onPopState);
 
 		return () => {
@@ -80,24 +67,6 @@
 
 	function persist(): void {
 		if (mounted) saveAppState(localStorage, appState);
-	}
-
-	function syncRoute(replaceHistory: boolean): void {
-		if (isCreatePath()) {
-			mode = 'manage';
-			selectedChecklistId = null;
-			now = new Date();
-			if (!editingChecklist) startNewChecklistDraft();
-			if (replaceHistory) updateCreatePath(true);
-			return;
-		}
-
-		enterChecklistFromUrl(replaceHistory);
-	}
-
-	function isCreatePath(): boolean {
-		if (!mounted) return initialCreate;
-		return window.location.pathname.replace(/\/$/, '') === '/create';
 	}
 
 	function enterChecklistFromUrl(replaceHistory: boolean): void {
@@ -131,17 +100,6 @@
 		} else {
 			url.searchParams.delete(DIRECT_LINK_PARAM);
 		}
-
-		const method = replace ? 'replaceState' : 'pushState';
-		window.history[method]({}, '', url);
-	}
-
-	function updateCreatePath(replace = false): void {
-		if (!mounted) return;
-
-		const url = new URL(window.location.href);
-		url.pathname = '/create';
-		url.search = '';
 
 		const method = replace ? 'replaceState' : 'pushState';
 		window.history[method]({}, '', url);
@@ -224,16 +182,6 @@
 		void goto('/create');
 	}
 
-	function startNewChecklistDraft(): void {
-		editingErrors = {};
-		setEditingChecklist({
-			id: createId(),
-			name: '',
-			description: '',
-			sections: [createSection('Daily', 'daily')]
-		});
-	}
-
 	function editChecklist(checklist: Checklist): void {
 		editingErrors = {};
 		setEditingChecklist(cloneChecklist(checklist));
@@ -287,7 +235,6 @@
 		editingChecklist = null;
 		openSectionIds = [];
 		editingErrors = {};
-		if (isCreatePath()) void goto('/', { replaceState: true });
 		persist();
 	}
 
@@ -540,7 +487,6 @@
 		editingChecklist = null;
 		openSectionIds = [];
 		editingErrors = {};
-		if (isCreatePath()) void goto('/', { replaceState: true });
 	}
 
 	function cleanupCompletions(checklist: Checklist): void {
@@ -592,50 +538,7 @@
 </svelte:head>
 
 <main class="min-h-screen bg-surface-950 text-surface-50">
-	{#if initialCreate}
-		<section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-			<header
-				class="flex flex-col gap-4 border-b border-surface-800 pb-5 md:flex-row md:items-center md:justify-between"
-			>
-				<div class="min-w-0">
-					<h1 class="text-3xl font-semibold tracking-normal text-surface-50">Create Checklist</h1>
-					<p class="mt-1 text-sm text-surface-400">Set up sections, tasks, and reset windows.</p>
-				</div>
-				<button
-					class="btn preset-tonal-surface self-start md:self-auto"
-					type="button"
-					onclick={cancelEditing}
-				>
-					<ArrowLeft size={18} aria-hidden="true" />
-					Back to Manage
-				</button>
-			</header>
-
-			{#if editingChecklist}
-				<ChecklistEditor
-					bind:checklist={editingChecklist}
-					bind:openSectionIds
-					bind:editingErrors
-					{frequencies}
-					{now}
-					onAddSection={() => addSection()}
-					onRemoveSection={removeSection}
-					onMoveSection={moveSection}
-					onAddTask={addTask}
-					onRemoveTask={removeTask}
-					onMoveTask={moveTask}
-					onUpdateFrequency={updateFrequency}
-					onUpdateScheduleTimeMode={updateScheduleTimeMode}
-					onUpdateScheduleInputTime={updateScheduleInputTime}
-					onUpdateResetWeekday={updateResetWeekday}
-					onUpdateAnchorDate={updateAnchorDate}
-					onClearLinkKeyError={() => (editingErrors.linkKey = undefined)}
-					onCancel={cancelEditing}
-					onSave={saveChecklist}
-				/>
-			{/if}
-		</section>
-	{:else if mode === 'manage'}
+	{#if mode === 'manage'}
 		<ChecklistManage
 			{appState}
 			bind:importInput
