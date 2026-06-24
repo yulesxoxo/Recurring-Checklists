@@ -1,6 +1,13 @@
 import { STORAGE_KEY } from './constants';
-import { normalizeChecklist } from './core';
-import type { AppState, Checklist, ChecklistParseOptions, CompletionState } from './types';
+import { isRecord, normalizeLinkKey, normalizeSchedule } from './core';
+import type {
+	AppState,
+	Checklist,
+	ChecklistParseOptions,
+	ChecklistSection,
+	ChecklistTask,
+	CompletionState
+} from './types';
 
 export function createEmptyAppState(): AppState {
 	return {
@@ -45,6 +52,49 @@ export function normalizeAppState(
 	};
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-	return typeof value === 'object' && value !== null;
+function normalizeChecklist(value: unknown, options: ChecklistParseOptions): Checklist | null {
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string')
+		return null;
+
+	const sections = Array.isArray(value.sections)
+		? value.sections
+				.map((section) => normalizeSection(section, options))
+				.filter((section): section is ChecklistSection => section !== null)
+		: [];
+
+	return {
+		id: value.id,
+		name: value.name,
+		description: typeof value.description === 'string' ? value.description : '',
+		linkKey: normalizeLinkKey(value.linkKey),
+		sections
+	};
+}
+
+function normalizeSection(value: unknown, options: ChecklistParseOptions): ChecklistSection | null {
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string')
+		return null;
+
+	const schedule = normalizeSchedule(value.schedule, options);
+	if (!schedule) return null;
+
+	return {
+		id: value.id,
+		name: value.name,
+		schedule,
+		tasks: Array.isArray(value.tasks)
+			? value.tasks.map(normalizeTask).filter((task): task is ChecklistTask => task !== null)
+			: []
+	};
+}
+
+function normalizeTask(value: unknown): ChecklistTask | null {
+	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string')
+		return null;
+
+	return {
+		id: value.id,
+		title: value.title,
+		notes: typeof value.notes === 'string' ? value.notes : undefined
+	};
 }
