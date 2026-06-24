@@ -18,6 +18,7 @@
 		formatUtcReset,
 		getCompletion,
 		getNextReset,
+		getResetWindowStart,
 		isTaskComplete,
 		loadAppState,
 		saveAppState,
@@ -54,8 +55,9 @@
 	);
 
 	onMount(() => {
-		appState = loadAppState(localStorage);
+		appState = normalizeAppState(loadAppState(localStorage));
 		mounted = true;
+		persist();
 
 		const timer = window.setInterval(() => {
 			now = new Date();
@@ -209,8 +211,28 @@
 			...section.schedule,
 			frequency,
 			resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
-			anchorDate: frequency === 'biweekly' ? (section.schedule.anchorDate ?? todayUtc()) : undefined
+			anchorDate:
+				frequency === 'biweekly'
+					? alignDateToWeekday(section.schedule.anchorDate ?? todayUtc(), 'monday')
+					: undefined
 		});
+	}
+
+	function updateResetWeekday(section: ChecklistSection, resetWeekday: Weekday): void {
+		section.schedule.resetWeekday = resetWeekday;
+		if (section.schedule.frequency === 'biweekly') {
+			section.schedule.anchorDate = alignDateToWeekday(
+				section.schedule.anchorDate ?? todayUtc(),
+				resetWeekday
+			);
+		}
+	}
+
+	function updateAnchorDate(section: ChecklistSection, anchorDate: string): void {
+		section.schedule.anchorDate = alignDateToWeekday(
+			anchorDate,
+			section.schedule.resetWeekday ?? 'monday'
+		);
 	}
 
 	function toggleTask(section: ChecklistSection, task: ChecklistTask, checked: boolean): void {
@@ -249,14 +271,19 @@
 	}
 
 	function createSection(name: string, frequency: Frequency): ChecklistSection {
+		const resetWeekday = frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined;
+
 		return {
 			id: createId(),
 			name,
 			schedule: normalizeSchedule({
 				frequency,
 				resetTimeUtc: '05:00',
-				resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
-				anchorDate: frequency === 'biweekly' ? todayUtc() : undefined
+				resetWeekday,
+				anchorDate:
+					frequency === 'biweekly'
+						? alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')
+						: undefined
 			}),
 			tasks: [createTask('New task')]
 		};
@@ -275,15 +302,32 @@
 			? schedule.resetTimeUtc
 			: '05:00';
 
+		const resetWeekday =
+			schedule.frequency === 'weekly' || schedule.frequency === 'biweekly'
+				? (schedule.resetWeekday ?? 'monday')
+				: undefined;
+
 		return {
 			frequency: schedule.frequency,
 			resetTimeUtc,
-			resetWeekday:
-				schedule.frequency === 'weekly' || schedule.frequency === 'biweekly'
-					? (schedule.resetWeekday ?? 'monday')
-					: undefined,
+			resetWeekday,
 			anchorDate:
-				schedule.frequency === 'biweekly' ? (schedule.anchorDate ?? todayUtc()) : undefined
+				schedule.frequency === 'biweekly'
+					? alignDateToWeekday(schedule.anchorDate ?? todayUtc(), resetWeekday ?? 'monday')
+					: undefined
+		};
+	}
+
+	function normalizeAppState(state: AppState): AppState {
+		return {
+			...state,
+			checklists: state.checklists.map((checklist) => ({
+				...checklist,
+				sections: checklist.sections.map((section) => ({
+					...section,
+					schedule: normalizeSchedule(section.schedule)
+				}))
+			}))
 		};
 	}
 
@@ -318,6 +362,41 @@
 
 	function todayUtc(): string {
 		return new Date().toISOString().slice(0, 10);
+	}
+
+	function alignDateToWeekday(dateValue: string, weekday: Weekday): string {
+		const date = parseUtcDateInput(dateValue) ?? parseUtcDateInput(todayUtc());
+		if (!date) return todayUtc();
+
+		const weekdayIndex = weekdays.indexOf(weekday);
+		const daysToAdd = (weekdayIndex - date.getUTCDay() + 7) % 7;
+		date.setUTCDate(date.getUTCDate() + daysToAdd);
+
+		return date.toISOString().slice(0, 10);
+	}
+
+	function dateInputMinForWeekday(weekday: Weekday): string {
+		return alignDateToWeekday('1970-01-01', weekday);
+	}
+
+	function parseUtcDateInput(dateValue: string): Date | null {
+		const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+		if (!match) return null;
+
+		const year = Number(match[1]);
+		const month = Number(match[2]) - 1;
+		const day = Number(match[3]);
+		const date = new Date(Date.UTC(year, month, day));
+
+		if (
+			date.getUTCFullYear() !== year ||
+			date.getUTCMonth() !== month ||
+			date.getUTCDate() !== day
+		) {
+			return null;
+		}
+
+		return date;
 	}
 
 	function titleCase(value: string): string {
@@ -532,7 +611,12 @@
 											<div class="mt-3 grid gap-3 sm:grid-cols-2">
 												<label class="label">
 													<span class="label-text">Reset weekday</span>
-													<select class="select" bind:value={section.schedule.resetWeekday}>
+													<select
+														class="select"
+														value={section.schedule.resetWeekday}
+														onchange={(event) =>
+															updateResetWeekday(section, event.currentTarget.value as Weekday)}
+													>
 														{#each weekdays as weekday}
 															<option value={weekday}>{titleCase(weekday)}</option>
 														{/each}
@@ -545,18 +629,33 @@
 														<input
 															class="input"
 															type="date"
-															bind:value={section.schedule.anchorDate}
+															min={dateInputMinForWeekday(
+																section.schedule.resetWeekday ?? 'monday'
+															)}
+															step="7"
+															value={section.schedule.anchorDate}
+															onchange={(event) =>
+																updateAnchorDate(section, event.currentTarget.value)}
 														/>
+														<span class="text-xs text-surface-400">
+															Only the selected reset weekday is valid.
+														</span>
 													</label>
 												{/if}
 											</div>
 										{/if}
 
 										<div
-											class="mt-3 rounded-base border border-surface-800 bg-surface-900 px-3 py-2 text-sm text-surface-300"
+											class="mt-3 grid gap-1 rounded-base border border-surface-800 bg-surface-900 px-3 py-2 text-sm text-surface-300 sm:grid-cols-2"
 										>
-											<span class="font-medium text-surface-100">Next reset:</span>
-											{formatUtcReset(getNextReset(section.schedule, now))}
+											<div>
+												<span class="font-medium text-surface-100">Previous reset:</span>
+												{formatUtcReset(getResetWindowStart(section.schedule, now))}
+											</div>
+											<div>
+												<span class="font-medium text-surface-100">Next reset:</span>
+												{formatUtcReset(getNextReset(section.schedule, now))}
+											</div>
 										</div>
 
 										<div class="mt-4 flex items-center justify-between gap-3">
@@ -656,6 +755,9 @@
 							<div class="min-w-0">
 								<h2 class="text-xl font-semibold text-surface-50">{section.name}</h2>
 								<p class="mt-1 text-sm text-surface-400">{describeSchedule(section.schedule)}</p>
+								<p class="mt-1 text-sm text-surface-400">
+									Previous reset: {formatUtcReset(getResetWindowStart(section.schedule, now))}
+								</p>
 								<p class="mt-1 text-sm text-surface-400">
 									Next reset: {formatUtcReset(getNextReset(section.schedule, now))}
 								</p>

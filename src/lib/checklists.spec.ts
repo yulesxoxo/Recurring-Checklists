@@ -126,4 +126,15 @@ describe('reset windows', () => {
 			'2026-06-08T05:00:00.000Z'
 		);
 	});
+
+	it('requires the biweekly anchor date to match the selected reset weekday', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'biweekly',
+			resetTimeUtc: '05:00',
+			resetWeekday: 'tuesday',
+			anchorDate: '2026-06-08'
+		};
+
+		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:00:00.000Z'))).toBeNull();
+	});
 });

@@ -191,6 +191,9 @@ function getBiweeklyWindowStart(schedule: RecurringSchedule, now: Date): Date | 
 	const anchor = parseAnchorDate(schedule.anchorDate, hours, minutes);
 	if (!anchor) return null;
 
+	const resetWeekday = weekdayIndex[schedule.resetWeekday ?? 'monday'];
+	if (anchor.getUTCDay() !== resetWeekday) return null;
+
 	const cyclesSinceAnchor = Math.floor((now.getTime() - anchor.getTime()) / (14 * dayMs));
 	let candidate = addDays(anchor, cyclesSinceAnchor * 14);
 	if (candidate > now) candidate = addDays(candidate, -14);
