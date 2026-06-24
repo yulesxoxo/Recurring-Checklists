@@ -9,6 +9,7 @@
 		getNextReset,
 		titleCase
 	} from '$lib/checklists';
+	import { formatLocalReset, formatUtcReset } from '$lib/date-time';
 
 	let {
 		checklist,
@@ -26,30 +27,6 @@
 		sectionProgress: (section: ChecklistSection) => { done: number; total: number };
 	} = $props();
 
-	function formatUtcReset(date: Date | null): string {
-		return formatResetDate(date, 'UTC');
-	}
-
-	function formatLocalReset(date: Date | null): string {
-		return formatResetDate(date);
-	}
-
-	function formatResetDate(date: Date | null, timeZone?: string): string {
-		if (!date) return 'Not scheduled';
-
-		const formatter = new Intl.DateTimeFormat('en-US', {
-			weekday: 'short',
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			hour12: false,
-			...(timeZone ? { timeZone } : {}),
-			timeZoneName: 'short'
-		});
-
-		return formatter.format(date);
-	}
 </script>
 
 <section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">

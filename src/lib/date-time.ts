@@ -1,0 +1,53 @@
+import type { RecurringSchedule } from './checklists';
+import { utcTimeToLocalTime } from './checklists';
+
+export function formatUtcReset(date: Date | null): string {
+	return formatResetDate(date, 'UTC');
+}
+
+export function formatLocalReset(date: Date | null): string {
+	return formatResetDate(date);
+}
+
+export function formatResetPair(date: Date | null): string {
+	return `Local: ${formatLocalReset(date)} | UTC: ${formatUtcReset(date)}`;
+}
+
+export function formatResetDate(date: Date | null, timeZone: string | undefined = undefined): string {
+	if (!date) return 'Not scheduled';
+
+	const formatter = new Intl.DateTimeFormat('en-US', {
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric',
+		hour: '2-digit',
+		minute: '2-digit',
+		hour12: false,
+		...(timeZone ? { timeZone } : {}),
+		timeZoneName: 'short'
+	});
+
+	return formatter.format(date);
+}
+
+export function scheduleInputTime(schedule: RecurringSchedule, reference: Date): string {
+	return schedule.timeMode === 'local'
+		? utcTimeToLocalTime(schedule.resetTimeUtc, reference)
+		: normalizeResetTime(schedule.resetTimeUtc);
+}
+
+export function normalizeResetTime(time: string): string {
+	const { hours, minutes } = parseResetTime(time);
+	return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}
+
+function parseResetTime(time: string): { hours: number; minutes: number } {
+	const match = /^(\d{2}):(\d{2})$/.exec(time);
+	if (!match) return { hours: 5, minutes: 0 };
+
+	const hours = Number(match[1]);
+	const minutes = Number(match[2]);
+
+	if (hours > 23 || minutes > 59) return { hours: 5, minutes: 0 };
+	return { hours, minutes };
+}

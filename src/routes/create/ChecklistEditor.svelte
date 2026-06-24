@@ -6,7 +6,6 @@
 		type Checklist,
 		type ChecklistSection,
 		type Frequency,
-		type RecurringSchedule,
 		type ScheduleTimeMode,
 		type Weekday,
 		alignDateToWeekday,
@@ -15,9 +14,9 @@
 		getNextReset,
 		getResetWindowStart,
 		titleCase,
-		utcTimeToLocalTime,
 		weekdays
 	} from '$lib/checklists';
+	import { formatResetPair, scheduleInputTime } from '$lib/date-time';
 
 	type EditingErrors = { linkKey?: string };
 
@@ -77,48 +76,6 @@
 		return alignDateToWeekday('1970-01-01', weekday);
 	}
 
-	function formatResetPair(date: Date | null): string {
-		return `Local: ${formatResetDate(date)} | UTC: ${formatResetDate(date, 'UTC')}`;
-	}
-
-	function formatResetDate(date: Date | null, timeZone?: string): string {
-		if (!date) return 'Not scheduled';
-
-		const formatter = new Intl.DateTimeFormat('en-US', {
-			weekday: 'short',
-			month: 'short',
-			day: 'numeric',
-			hour: '2-digit',
-			minute: '2-digit',
-			hour12: false,
-			...(timeZone ? { timeZone } : {}),
-			timeZoneName: 'short'
-		});
-
-		return formatter.format(date);
-	}
-
-	function scheduleInputTime(schedule: RecurringSchedule, reference: Date): string {
-		return schedule.timeMode === 'local'
-			? utcTimeToLocalTime(schedule.resetTimeUtc, reference)
-			: normalizeResetTime(schedule.resetTimeUtc);
-	}
-
-	function normalizeResetTime(time: string): string {
-		const { hours, minutes } = parseResetTime(time);
-		return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-	}
-
-	function parseResetTime(time: string): { hours: number; minutes: number } {
-		const match = /^(\d{2}):(\d{2})$/.exec(time);
-		if (!match) return { hours: 5, minutes: 0 };
-
-		const hours = Number(match[1]);
-		const minutes = Number(match[2]);
-
-		if (hours > 23 || minutes > 59) return { hours: 5, minutes: 0 };
-		return { hours, minutes };
-	}
 </script>
 
 <section class="rounded-container border border-surface-800 bg-surface-900 p-5 shadow-sm">
