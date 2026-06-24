@@ -15,7 +15,6 @@
 		type Checklist,
 		type ChecklistSection,
 		type Frequency,
-		type ScheduleTimeMode,
 		type Weekday,
 		countTasks
 	} from '$lib/checklists';
@@ -49,7 +48,6 @@
 		onRemoveTask,
 		onMoveTask,
 		onUpdateFrequency,
-		onUpdateScheduleTimeMode,
 		onUpdateScheduleInputTime,
 		onUpdateResetWeekday,
 		onUpdateAnchorDate,
@@ -82,8 +80,7 @@
 		onRemoveTask: (section: ChecklistSection, taskId: string) => void;
 		onMoveTask: (section: ChecklistSection, taskId: string, direction: -1 | 1) => void;
 		onUpdateFrequency: (section: ChecklistSection, frequency: Frequency) => void;
-		onUpdateScheduleTimeMode: (section: ChecklistSection, timeMode: ScheduleTimeMode) => void;
-		onUpdateScheduleInputTime: (section: ChecklistSection, time: string) => void;
+		onUpdateScheduleInputTime: (section: ChecklistSection, resetTimeUtc: string) => void;
 		onUpdateResetWeekday: (section: ChecklistSection, resetWeekday: Weekday) => void;
 		onUpdateAnchorDate: (section: ChecklistSection, anchorDate: string) => void;
 		onClearLinkKeyError: () => void;
@@ -247,7 +244,6 @@
 				{onRemoveTask}
 				{onMoveTask}
 				{onUpdateFrequency}
-				{onUpdateScheduleTimeMode}
 				{onUpdateScheduleInputTime}
 				{onUpdateResetWeekday}
 				{onUpdateAnchorDate}

@@ -6,7 +6,6 @@
 		type Checklist,
 		type ChecklistSection,
 		type Frequency,
-		type ScheduleTimeMode,
 		type Weekday,
 		alignDateToWeekday,
 		describeSchedule,
@@ -16,7 +15,12 @@
 		titleCase,
 		weekdays
 	} from '$lib/checklists';
-	import { formatResetPair, scheduleInputTime } from '$lib/date-time';
+	import {
+		type ScheduleTimeMode,
+		formatResetPair,
+		scheduleInputTime,
+		scheduleInputTimeToUtc
+	} from '$lib/date-time';
 
 	type EditingErrors = { linkKey?: string };
 
@@ -35,7 +39,6 @@
 		onRemoveTask,
 		onMoveTask,
 		onUpdateFrequency,
-		onUpdateScheduleTimeMode,
 		onUpdateScheduleInputTime,
 		onUpdateResetWeekday,
 		onUpdateAnchorDate,
@@ -55,14 +58,15 @@
 		onRemoveTask: (section: ChecklistSection, taskId: string) => void;
 		onMoveTask: (section: ChecklistSection, taskId: string, direction: -1 | 1) => void;
 		onUpdateFrequency: (section: ChecklistSection, frequency: Frequency) => void;
-		onUpdateScheduleTimeMode: (section: ChecklistSection, timeMode: ScheduleTimeMode) => void;
-		onUpdateScheduleInputTime: (section: ChecklistSection, time: string) => void;
+		onUpdateScheduleInputTime: (section: ChecklistSection, resetTimeUtc: string) => void;
 		onUpdateResetWeekday: (section: ChecklistSection, resetWeekday: Weekday) => void;
 		onUpdateAnchorDate: (section: ChecklistSection, anchorDate: string) => void;
 		onClearLinkKeyError: () => void;
 		onCancel: () => void;
 		onSave: () => void;
 	} = $props();
+
+	let scheduleTimeModes = $state<Record<string, ScheduleTimeMode>>({});
 
 	function updateOpenSections(details: { value: string[] }): void {
 		openSectionIds = details.value;
@@ -74,6 +78,24 @@
 
 	function dateInputMinForWeekday(weekday: Weekday): string {
 		return alignDateToWeekday('1970-01-01', weekday);
+	}
+
+	function scheduleTimeMode(section: ChecklistSection): ScheduleTimeMode {
+		return scheduleTimeModes[section.id] ?? 'utc';
+	}
+
+	function updateEditorScheduleTimeMode(section: ChecklistSection, timeMode: ScheduleTimeMode): void {
+		scheduleTimeModes = {
+			...scheduleTimeModes,
+			[section.id]: timeMode
+		};
+	}
+
+	function updateScheduleInputTime(section: ChecklistSection, time: string): void {
+		onUpdateScheduleInputTime(
+			section,
+			scheduleInputTimeToUtc(time, scheduleTimeMode(section), now)
+		);
 	}
 
 </script>
@@ -228,23 +250,23 @@
 									>
 										<button
 											class={`btn btn-sm rounded-none ${
-												(section.schedule.timeMode ?? 'utc') === 'local'
+												scheduleTimeMode(section) === 'local'
 													? 'preset-filled-primary-500'
 													: 'preset-tonal-surface'
 											}`}
 											type="button"
-											onclick={() => onUpdateScheduleTimeMode(section, 'local')}
+											onclick={() => updateEditorScheduleTimeMode(section, 'local')}
 										>
 											Local time
 										</button>
 										<button
 											class={`btn btn-sm rounded-none ${
-												(section.schedule.timeMode ?? 'utc') === 'utc'
+												scheduleTimeMode(section) === 'utc'
 													? 'preset-filled-primary-500'
 													: 'preset-tonal-surface'
 											}`}
 											type="button"
-											onclick={() => onUpdateScheduleTimeMode(section, 'utc')}
+											onclick={() => updateEditorScheduleTimeMode(section, 'utc')}
 										>
 											UTC
 										</button>
@@ -252,12 +274,11 @@
 									<input
 										class="input"
 										type="time"
-										value={scheduleInputTime(section.schedule, now)}
-										onchange={(event) =>
-											onUpdateScheduleInputTime(section, event.currentTarget.value)}
+										value={scheduleInputTime(section.schedule, now, scheduleTimeMode(section))}
+										onchange={(event) => updateScheduleInputTime(section, event.currentTarget.value)}
 									/>
 									<span class="text-xs text-surface-400">
-										Local {scheduleInputTime({ ...section.schedule, timeMode: 'local' }, now)}
+										Local {scheduleInputTime(section.schedule, now, 'local')}
 										/ UTC {section.schedule.resetTimeUtc}
 									</span>
 								</div>

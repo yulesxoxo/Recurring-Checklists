@@ -1,7 +1,6 @@
 export type BaseFrequency = 'daily' | 'weekly' | 'biweekly';
 export type DevFrequency = 'hourly' | 'minutely';
 export type Frequency = BaseFrequency | DevFrequency;
-export type ScheduleTimeMode = 'local' | 'utc';
 export type Weekday =
 	| 'sunday'
 	| 'monday'
@@ -14,7 +13,6 @@ export type Weekday =
 export type RecurringSchedule = {
 	frequency: Frequency;
 	resetTimeUtc: string;
-	timeMode?: ScheduleTimeMode;
 	resetWeekday?: Weekday;
 	anchorDate?: string;
 };

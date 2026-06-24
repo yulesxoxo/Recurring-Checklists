@@ -2,8 +2,7 @@ import { STORAGE_KEY } from './constants';
 import {
 	isValidResetTime,
 	normalizeResetTime,
-	parseResetTime,
-	utcTimeToLocalTime
+	parseResetTime
 } from '../date-time';
 import type {
 	AppState,
@@ -17,7 +16,6 @@ import type {
 	ImportPortableChecklistsResult,
 	PortableChecklistExport,
 	RecurringSchedule,
-	ScheduleTimeMode,
 	Weekday
 } from './types';
 
@@ -86,7 +84,6 @@ export function normalizeSchedule(
 	const frequency = value.frequency;
 	const resetTimeUtc =
 		typeof value.resetTimeUtc === 'string' ? normalizeResetTime(value.resetTimeUtc) : '05:00';
-	const timeMode = isScheduleTimeMode(value.timeMode) ? value.timeMode : 'utc';
 	const resetWeekday =
 		frequency === 'weekly' || frequency === 'biweekly'
 			? isWeekday(value.resetWeekday)
@@ -97,7 +94,6 @@ export function normalizeSchedule(
 	return {
 		frequency,
 		resetTimeUtc,
-		timeMode,
 		resetWeekday,
 		anchorDate:
 			frequency === 'biweekly'
@@ -183,20 +179,18 @@ export function getNextReset(schedule: RecurringSchedule, now = new Date()): Dat
 
 export function describeSchedule(schedule: RecurringSchedule): string {
 	const time = normalizeResetTime(schedule.resetTimeUtc);
-	const local = utcTimeToLocalTime(time);
-	const enteredAs = schedule.timeMode === 'local' ? `, entered as ${local} local time` : '';
 
 	switch (schedule.frequency) {
 		case 'minutely':
 			return 'Resets every minute';
 		case 'hourly':
-			return `Resets hourly at minute ${time.slice(3)} UTC${enteredAs}`;
+			return `Resets hourly at minute ${time.slice(3)} UTC`;
 		case 'daily':
-			return `Resets daily at ${time} UTC${enteredAs}`;
+			return `Resets daily at ${time} UTC`;
 		case 'weekly':
-			return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC${enteredAs}`;
+			return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
 		case 'biweekly':
-			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC${enteredAs}`;
+			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
 	}
 }
 
@@ -400,7 +394,6 @@ function normalizePortableSchedule(
 ): RecurringSchedule | null {
 	if (!isRecord(value) || !isFrequency(value.frequency, options)) return null;
 	if (typeof value.resetTimeUtc !== 'string' || !isValidResetTime(value.resetTimeUtc)) return null;
-	if (value.timeMode !== undefined && !isScheduleTimeMode(value.timeMode)) return null;
 
 	if (value.frequency === 'weekly' || value.frequency === 'biweekly') {
 		if (value.resetWeekday !== undefined && !isWeekday(value.resetWeekday)) return null;
@@ -489,10 +482,6 @@ function isFrequency(value: unknown, options: ChecklistParseOptions): value is F
 		value === 'biweekly' ||
 		(options.allowDevFrequencies === true && (value === 'hourly' || value === 'minutely'))
 	);
-}
-
-function isScheduleTimeMode(value: unknown): value is ScheduleTimeMode {
-	return value === 'local' || value === 'utc';
 }
 
 function isWeekday(value: unknown): value is Weekday {

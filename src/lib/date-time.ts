@@ -1,4 +1,6 @@
-import type { RecurringSchedule, ScheduleTimeMode } from './checklists/types';
+import type { RecurringSchedule } from './checklists/types';
+
+export type ScheduleTimeMode = 'local' | 'utc';
 
 export function formatUtcReset(date: Date | null): string {
 	return formatResetDate(date, 'UTC');
@@ -29,8 +31,12 @@ export function formatResetDate(date: Date | null, timeZone: string | undefined 
 	return formatter.format(date);
 }
 
-export function scheduleInputTime(schedule: RecurringSchedule, reference: Date): string {
-	return schedule.timeMode === 'local'
+export function scheduleInputTime(
+	schedule: RecurringSchedule,
+	reference: Date,
+	timeMode: ScheduleTimeMode = 'utc'
+): string {
+	return timeMode === 'local'
 		? utcTimeToLocalTime(schedule.resetTimeUtc, reference)
 		: normalizeResetTime(schedule.resetTimeUtc);
 }

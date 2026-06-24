@@ -61,7 +61,7 @@ describe('checklist storage', () => {
 						{
 							id: 'section-1',
 							name: 'Daily',
-							schedule: { frequency: 'daily', resetTimeUtc: '05:00', timeMode: 'utc' },
+							schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
 							tasks: [{ id: 'task-1', title: 'Review queue', notes: 'Escalate blockers' }]
 						}
 					]
@@ -285,7 +285,6 @@ describe('schedule normalization', () => {
 		expect(schedule).toEqual({
 			frequency: 'minutely',
 			resetTimeUtc: '09:30',
-			timeMode: 'local',
 			resetWeekday: undefined,
 			anchorDate: undefined
 		});
@@ -323,7 +322,7 @@ describe('portable exports', () => {
 						{
 							id: 'section-1',
 							name: 'Daily',
-							schedule: { frequency: 'daily', resetTimeUtc: '05:00', timeMode: 'utc' },
+							schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
 							tasks: [{ id: 'task-1', title: 'Review queue', notes: 'Escalate blockers' }]
 						}
 					]
@@ -352,7 +351,7 @@ describe('portable exports', () => {
 				sections: [
 					{
 						name: 'Daily',
-						schedule: { frequency: 'daily', resetTimeUtc: '05:00', timeMode: 'utc' },
+						schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
 						tasks: [{ title: 'Review queue', notes: 'Escalate blockers' }]
 					}
 				]

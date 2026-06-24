@@ -12,7 +12,6 @@
 		type ChecklistTask,
 		type CompletionRecord,
 		type Frequency,
-		type ScheduleTimeMode,
 		type Weekday,
 		alignDateToWeekday,
 		allFrequencies,
@@ -29,7 +28,6 @@
 		saveAppState,
 		todayUtc
 	} from '$lib/checklists';
-	import { scheduleInputTimeToUtc } from '$lib/date-time';
 
 	type Mode = 'manage' | 'view';
 
@@ -238,8 +236,7 @@
 					allowDevFrequencies: import.meta.env.DEV
 				}) ?? {
 					frequency: 'daily',
-					resetTimeUtc: '05:00',
-					timeMode: 'utc'
+					resetTimeUtc: '05:00'
 				},
 				tasks: section.tasks.map((task) => ({
 					...task,
@@ -404,17 +401,10 @@
 			) ?? section.schedule;
 	}
 
-	function updateScheduleTimeMode(section: ChecklistSection, timeMode: ScheduleTimeMode): void {
+	function updateScheduleInputTime(section: ChecklistSection, resetTimeUtc: string): void {
 		section.schedule = {
 			...section.schedule,
-			timeMode
-		};
-	}
-
-	function updateScheduleInputTime(section: ChecklistSection, time: string): void {
-		section.schedule = {
-			...section.schedule,
-			resetTimeUtc: scheduleInputTimeToUtc(time, section.schedule.timeMode ?? 'utc', now)
+			resetTimeUtc
 		};
 	}
 
@@ -504,7 +494,6 @@
 				{
 					frequency,
 					resetTimeUtc: '05:00',
-					timeMode: 'utc',
 					resetWeekday,
 					anchorDate:
 						frequency === 'biweekly'
@@ -514,8 +503,7 @@
 				{ allowDevFrequencies: import.meta.env.DEV }
 			) ?? {
 				frequency: 'daily',
-				resetTimeUtc: '05:00',
-				timeMode: 'utc'
+				resetTimeUtc: '05:00'
 			},
 			tasks: [createTask('New task')]
 		};
@@ -611,7 +599,6 @@
 			onRemoveTask={removeTask}
 			onMoveTask={moveTask}
 			onUpdateFrequency={updateFrequency}
-			onUpdateScheduleTimeMode={updateScheduleTimeMode}
 			onUpdateScheduleInputTime={updateScheduleInputTime}
 			onUpdateResetWeekday={updateResetWeekday}
 			onUpdateAnchorDate={updateAnchorDate}
