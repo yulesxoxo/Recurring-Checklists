@@ -20,6 +20,7 @@
 		saveAppState
 	} from '$lib/checklists';
 	import { alignDateToWeekday, todayUtc } from '$lib/date-time';
+	import { createId } from '$lib/id';
 
 	const frequencies = allFrequencies;
 
@@ -251,11 +252,6 @@
 		}
 	}
 
-	function createId(): string {
-		return (
-			globalThis.crypto?.randomUUID?.() ?? `id-${Date.now()}-${Math.random().toString(36).slice(2)}`
-		);
-	}
 </script>
 
 <svelte:head>
