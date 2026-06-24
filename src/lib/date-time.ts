@@ -10,10 +10,6 @@ export function formatLocalReset(date: Date | null): string {
 	return formatResetDate(date);
 }
 
-export function formatResetPair(date: Date | null): string {
-	return `Local: ${formatLocalReset(date)} | UTC: ${formatUtcReset(date)}`;
-}
-
 export function formatResetDate(date: Date | null, timeZone: string | undefined = undefined): string {
 	if (!date) return 'Not scheduled';
 

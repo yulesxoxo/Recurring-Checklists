@@ -17,7 +17,8 @@
 	} from '$lib/checklists';
 	import {
 		type ScheduleTimeMode,
-		formatResetPair,
+		formatLocalReset,
+		formatUtcReset,
 		scheduleInputTime,
 		scheduleInputTimeToUtc
 	} from '$lib/date-time';
@@ -331,12 +332,14 @@
 								class="mt-3 grid gap-1 rounded-base border border-surface-800 bg-surface-900 px-3 py-2 text-sm text-surface-300 sm:grid-cols-2"
 							>
 								<div>
-									<span class="font-medium text-surface-100">Previous reset:</span>
-									{formatResetPair(getResetWindowStart(section.schedule, now))}
+									<div class="font-medium text-surface-100">Previous reset</div>
+									<div>Local: {formatLocalReset(getResetWindowStart(section.schedule, now))}</div>
+									<div>UTC: {formatUtcReset(getResetWindowStart(section.schedule, now))}</div>
 								</div>
 								<div>
-									<span class="font-medium text-surface-100">Next reset:</span>
-									{formatResetPair(getNextReset(section.schedule, now))}
+									<div class="font-medium text-surface-100">Next reset</div>
+									<div>Local: {formatLocalReset(getNextReset(section.schedule, now))}</div>
+									<div>UTC: {formatUtcReset(getNextReset(section.schedule, now))}</div>
 								</div>
 							</div>
 						{/if}
