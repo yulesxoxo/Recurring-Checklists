@@ -5,11 +5,9 @@
 		type ChecklistSection,
 		type ChecklistTask,
 		countTasks,
-		describeSchedule,
-		getNextReset,
 		titleCase
 	} from '$lib/checklists';
-	import { formatLocalReset, formatUtcReset } from '$lib/date-time';
+	import { describeSchedule, formatLocalReset, formatUtcReset, getNextReset } from '$lib/date-time';
 
 	let {
 		checklist,

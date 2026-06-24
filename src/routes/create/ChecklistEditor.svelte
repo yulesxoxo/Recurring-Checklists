@@ -7,18 +7,18 @@
 		type ChecklistSection,
 		type Frequency,
 		type Weekday,
-		alignDateToWeekday,
-		describeSchedule,
 		devFrequencies,
-		getNextReset,
-		getResetWindowStart,
 		titleCase,
 		weekdays
 	} from '$lib/checklists';
 	import {
 		type ScheduleTimeMode,
+		alignDateToWeekday,
+		describeSchedule,
 		formatLocalReset,
 		formatUtcReset,
+		getNextReset,
+		getResetWindowStart,
 		scheduleInputTime,
 		scheduleInputTimeToUtc
 	} from '$lib/date-time';

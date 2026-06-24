@@ -10,7 +10,6 @@
 		type ChecklistTask,
 		type Frequency,
 		type Weekday,
-		alignDateToWeekday,
 		allFrequencies,
 		insertArrayItem,
 		linkKeyConflict,
@@ -18,9 +17,9 @@
 		moveArrayItem,
 		normalizeLinkKey,
 		normalizeSchedule,
-		saveAppState,
-		todayUtc
+		saveAppState
 	} from '$lib/checklists';
+	import { alignDateToWeekday, todayUtc } from '$lib/date-time';
 
 	const frequencies = allFrequencies;
 

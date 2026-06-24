@@ -12,18 +12,15 @@
 		type ChecklistTask,
 		type CompletionRecord,
 		type Frequency,
-		type Weekday,
-		alignDateToWeekday,
 		createEmptyAppState,
 		exportPortableChecklist,
-		getResetWindowStart,
 		importPortableChecklists,
 		linkKeyConflict,
 		loadAppState,
 		normalizeSchedule,
-		saveAppState,
-		todayUtc
+		saveAppState
 	} from '$lib/checklists';
+	import { alignDateToWeekday, getResetWindowStart, todayUtc } from '$lib/date-time';
 
 	type Mode = 'manage' | 'view';
 

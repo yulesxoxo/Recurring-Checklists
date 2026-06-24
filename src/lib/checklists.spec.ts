@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { AppState, RecurringSchedule } from './checklists';
-import { localTimeToUtcTime, scheduleInputTimeToUtc } from './date-time';
+import { getResetWindowStart, localTimeToUtcTime, scheduleInputTimeToUtc } from './date-time';
 import {
 	STORAGE_KEY,
 	createEmptyAppState,
 	exportPortableChecklist,
-	getResetWindowStart,
 	importPortableChecklists,
 	insertArrayItem,
 	linkKeyConflict,

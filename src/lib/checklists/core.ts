@@ -1,16 +1,15 @@
-import { STORAGE_KEY } from './constants';
 import {
+	alignDateToWeekday,
 	isValidResetTime,
 	normalizeResetTime,
-	parseResetTime
+	parseUtcDateInput,
+	todayUtc
 } from '../date-time';
 import type {
-	AppState,
 	Checklist,
 	ChecklistParseOptions,
 	ChecklistSection,
 	ChecklistTask,
-	CompletionState,
 	Frequency,
 	ImportPortableChecklistsOptions,
 	ImportPortableChecklistsResult,
@@ -18,62 +17,6 @@ import type {
 	RecurringSchedule,
 	Weekday
 } from './types';
-
-const dayMs = 24 * 60 * 60 * 1000;
-const hourMs = 60 * 60 * 1000;
-const minuteMs = 60 * 1000;
-const weekdayIndex: Record<Weekday, number> = {
-	sunday: 0,
-	monday: 1,
-	tuesday: 2,
-	wednesday: 3,
-	thursday: 4,
-	friday: 5,
-	saturday: 6
-};
-
-export function createEmptyAppState(): AppState {
-	return {
-		version: 1,
-		checklists: [],
-		completions: {}
-	};
-}
-
-export function loadAppState(storage: Storage, options: ChecklistParseOptions = {}): AppState {
-	const stored = storage.getItem(STORAGE_KEY);
-	if (!stored) return createEmptyAppState();
-
-	try {
-		const parsed: unknown = JSON.parse(stored);
-		return normalizeAppState(parsed, options) ?? createEmptyAppState();
-	} catch {
-		return createEmptyAppState();
-	}
-}
-
-export function saveAppState(storage: Storage, state: AppState): void {
-	storage.setItem(STORAGE_KEY, JSON.stringify(state));
-}
-
-export function normalizeAppState(
-	value: unknown,
-	options: ChecklistParseOptions = {}
-): AppState | null {
-	if (!isRecord(value) || value.version !== 1 || !Array.isArray(value.checklists)) return null;
-
-	const completions = isRecord(value.completions)
-		? (value.completions as CompletionState)
-		: createEmptyAppState().completions;
-
-	return {
-		version: 1,
-		checklists: value.checklists
-			.map((checklist) => normalizeChecklist(checklist, options))
-			.filter((checklist): checklist is Checklist => checklist !== null),
-		completions
-	};
-}
 
 export function normalizeSchedule(
 	value: unknown,
@@ -107,91 +50,6 @@ export function normalizeSchedule(
 
 export function countTasks(checklist: Checklist): number {
 	return checklist.sections.reduce((total, section) => total + section.tasks.length, 0);
-}
-
-export function insertArrayItem<T>(items: T[], item: T, position = items.length): T[] {
-	const index = clampIndex(position, 0, items.length);
-	return [...items.slice(0, index), item, ...items.slice(index)];
-}
-
-export function moveArrayItem<T>(items: T[], index: number, direction: -1 | 1): T[] {
-	const nextIndex = index + direction;
-	if (index < 0 || index >= items.length || nextIndex < 0 || nextIndex >= items.length) {
-		return items;
-	}
-
-	const moved = [...items];
-	[moved[index], moved[nextIndex]] = [moved[nextIndex], moved[index]];
-	return moved;
-}
-
-export function getResetWindowStart(schedule: RecurringSchedule, now = new Date()): Date | null {
-	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
-
-	if (schedule.frequency === 'minutely') {
-		return new Date(Math.floor(now.getTime() / minuteMs) * minuteMs);
-	}
-
-	if (schedule.frequency === 'hourly') {
-		const candidate = new Date(
-			Date.UTC(
-				now.getUTCFullYear(),
-				now.getUTCMonth(),
-				now.getUTCDate(),
-				now.getUTCHours(),
-				minutes
-			)
-		);
-		return candidate > now ? new Date(candidate.getTime() - hourMs) : candidate;
-	}
-
-	if (schedule.frequency === 'daily') {
-		const candidate = new Date(
-			Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes)
-		);
-		return candidate > now ? addDays(candidate, -1) : candidate;
-	}
-
-	if (schedule.frequency === 'weekly') {
-		return getWeeklyWindowStart(schedule, now, 7);
-	}
-
-	return getBiweeklyWindowStart(schedule, now);
-}
-
-export function getNextReset(schedule: RecurringSchedule, now = new Date()): Date | null {
-	const windowStart = getResetWindowStart(schedule, now);
-	if (!windowStart) return null;
-
-	switch (schedule.frequency) {
-		case 'minutely':
-			return new Date(windowStart.getTime() + minuteMs);
-		case 'hourly':
-			return new Date(windowStart.getTime() + hourMs);
-		case 'daily':
-			return addDays(windowStart, 1);
-		case 'weekly':
-			return addDays(windowStart, 7);
-		case 'biweekly':
-			return addDays(windowStart, 14);
-	}
-}
-
-export function describeSchedule(schedule: RecurringSchedule): string {
-	const time = normalizeResetTime(schedule.resetTimeUtc);
-
-	switch (schedule.frequency) {
-		case 'minutely':
-			return 'Resets every minute';
-		case 'hourly':
-			return `Resets hourly at minute ${time.slice(3)} UTC`;
-		case 'daily':
-			return `Resets daily at ${time} UTC`;
-		case 'weekly':
-			return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
-		case 'biweekly':
-			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
-	}
 }
 
 export function exportPortableChecklist(checklist: Checklist): PortableChecklistExport {
@@ -323,25 +181,11 @@ export function importPortableChecklists(
 	};
 }
 
-export function todayUtc(): string {
-	return new Date().toISOString().slice(0, 10);
-}
-
-export function alignDateToWeekday(dateValue: string, weekday: Weekday): string {
-	const date = parseUtcDateInput(dateValue) ?? parseUtcDateInput(todayUtc());
-	if (!date) return todayUtc();
-
-	const daysToAdd = (weekdayIndex[weekday] - date.getUTCDay() + 7) % 7;
-	date.setUTCDate(date.getUTCDate() + daysToAdd);
-
-	return date.toISOString().slice(0, 10);
-}
-
 export function titleCase(value: string): string {
 	return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
 
-function normalizeChecklist(value: unknown, options: ChecklistParseOptions): Checklist | null {
+export function normalizeChecklist(value: unknown, options: ChecklistParseOptions): Checklist | null {
 	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string')
 		return null;
 
@@ -404,69 +248,6 @@ function normalizePortableSchedule(
 	}
 
 	return normalizeSchedule(value, options);
-}
-
-function getWeeklyWindowStart(schedule: RecurringSchedule, now: Date, intervalDays: 7): Date {
-	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
-	const resetWeekday = weekdayIndex[schedule.resetWeekday ?? 'monday'];
-	const currentWeekday = now.getUTCDay();
-	const daysSinceResetWeekday = (currentWeekday - resetWeekday + 7) % 7;
-	const candidate = new Date(
-		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes)
-	);
-	candidate.setUTCDate(candidate.getUTCDate() - daysSinceResetWeekday);
-
-	return candidate > now ? addDays(candidate, -intervalDays) : candidate;
-}
-
-function getBiweeklyWindowStart(schedule: RecurringSchedule, now: Date): Date | null {
-	if (!schedule.anchorDate) return null;
-
-	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
-	const anchor = parseAnchorDate(schedule.anchorDate, hours, minutes);
-	if (!anchor) return null;
-
-	const resetWeekday = weekdayIndex[schedule.resetWeekday ?? 'monday'];
-	if (anchor.getUTCDay() !== resetWeekday) return null;
-
-	const cyclesSinceAnchor = Math.floor((now.getTime() - anchor.getTime()) / (14 * dayMs));
-	let candidate = addDays(anchor, cyclesSinceAnchor * 14);
-	if (candidate > now) candidate = addDays(candidate, -14);
-
-	return candidate;
-}
-
-function parseAnchorDate(anchorDate: string, hours: number, minutes: number): Date | null {
-	const date = parseUtcDateInput(anchorDate);
-	if (!date) return null;
-
-	date.setUTCHours(hours, minutes, 0, 0);
-	return date;
-}
-
-function parseUtcDateInput(dateValue: string): Date | null {
-	const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
-	if (!match) return null;
-
-	const year = Number(match[1]);
-	const month = Number(match[2]) - 1;
-	const day = Number(match[3]);
-	const date = new Date(Date.UTC(year, month, day));
-
-	if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) {
-		return null;
-	}
-
-	return date;
-}
-
-function addDays(date: Date, days: number): Date {
-	return new Date(date.getTime() + days * dayMs);
-}
-
-function clampIndex(value: number, min: number, max: number): number {
-	if (!Number.isFinite(value)) return max;
-	return Math.min(Math.max(Math.trunc(value), min), max);
 }
 
 function createId(): string {
