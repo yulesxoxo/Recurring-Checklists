@@ -756,9 +756,6 @@
 								<h2 class="text-xl font-semibold text-surface-50">{section.name}</h2>
 								<p class="mt-1 text-sm text-surface-400">{describeSchedule(section.schedule)}</p>
 								<p class="mt-1 text-sm text-surface-400">
-									Previous reset: {formatUtcReset(getResetWindowStart(section.schedule, now))}
-								</p>
-								<p class="mt-1 text-sm text-surface-400">
 									Next reset: {formatUtcReset(getNextReset(section.schedule, now))}
 								</p>
 							</div>
