@@ -19,9 +19,9 @@
 		normalizeLinkKey,
 		normalizeSchedule,
 		saveAppState,
-		scheduleInputTimeToUtc,
 		todayUtc
 	} from '$lib/checklists';
+	import { scheduleInputTimeToUtc } from '$lib/date-time';
 
 	const frequencies = allFrequencies;
 

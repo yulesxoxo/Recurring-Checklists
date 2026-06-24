@@ -1,4 +1,10 @@
 import { STORAGE_KEY } from './constants';
+import {
+	isValidResetTime,
+	normalizeResetTime,
+	parseResetTime,
+	utcTimeToLocalTime
+} from '../date-time';
 import type {
 	AppState,
 	Checklist,
@@ -192,42 +198,6 @@ export function describeSchedule(schedule: RecurringSchedule): string {
 		case 'biweekly':
 			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC${enteredAs}`;
 	}
-}
-
-export function utcTimeToLocalTime(time: string, reference = new Date()): string {
-	const { hours, minutes } = parseResetTime(time);
-	const utcDate = new Date(
-		Date.UTC(
-			reference.getUTCFullYear(),
-			reference.getUTCMonth(),
-			reference.getUTCDate(),
-			hours,
-			minutes
-		)
-	);
-
-	return formatTimeParts(utcDate.getHours(), utcDate.getMinutes());
-}
-
-export function localTimeToUtcTime(time: string, reference = new Date()): string {
-	const { hours, minutes } = parseResetTime(time);
-	const localDate = new Date(
-		reference.getFullYear(),
-		reference.getMonth(),
-		reference.getDate(),
-		hours,
-		minutes
-	);
-
-	return formatTimeParts(localDate.getUTCHours(), localDate.getUTCMinutes());
-}
-
-export function scheduleInputTimeToUtc(
-	time: string,
-	timeMode: ScheduleTimeMode,
-	reference = new Date()
-): string {
-	return timeMode === 'local' ? localTimeToUtcTime(time, reference) : normalizeResetTime(time);
 }
 
 export function exportPortableChecklist(checklist: Checklist): PortableChecklistExport {
@@ -473,32 +443,6 @@ function getBiweeklyWindowStart(schedule: RecurringSchedule, now: Date): Date | 
 	return candidate;
 }
 
-function parseResetTime(time: string): { hours: number; minutes: number } {
-	const match = /^(\d{2}):(\d{2})$/.exec(time);
-	if (!match) return { hours: 5, minutes: 0 };
-
-	const hours = Number(match[1]);
-	const minutes = Number(match[2]);
-
-	if (hours > 23 || minutes > 59) return { hours: 5, minutes: 0 };
-	return { hours, minutes };
-}
-
-function normalizeResetTime(time: string): string {
-	const { hours, minutes } = parseResetTime(time);
-	return formatTimeParts(hours, minutes);
-}
-
-function isValidResetTime(time: string): boolean {
-	const match = /^(\d{2}):(\d{2})$/.exec(time);
-	if (!match) return false;
-
-	const hours = Number(match[1]);
-	const minutes = Number(match[2]);
-
-	return hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
-}
-
 function parseAnchorDate(anchorDate: string, hours: number, minutes: number): Date | null {
 	const date = parseUtcDateInput(anchorDate);
 	if (!date) return null;
@@ -525,10 +469,6 @@ function parseUtcDateInput(dateValue: string): Date | null {
 
 function addDays(date: Date, days: number): Date {
 	return new Date(date.getTime() + days * dayMs);
-}
-
-function formatTimeParts(hours: number, minutes: number): string {
-	return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
 function clampIndex(value: number, min: number, max: number): number {

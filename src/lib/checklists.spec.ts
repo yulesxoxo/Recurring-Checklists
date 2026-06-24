@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { AppState, RecurringSchedule } from './checklists';
+import { localTimeToUtcTime, scheduleInputTimeToUtc } from './date-time';
 import {
 	STORAGE_KEY,
 	createEmptyAppState,
@@ -8,12 +9,10 @@ import {
 	importPortableChecklists,
 	insertArrayItem,
 	linkKeyConflict,
-	localTimeToUtcTime,
 	loadAppState,
 	moveArrayItem,
 	normalizeSchedule,
-	saveAppState,
-	scheduleInputTimeToUtc
+	saveAppState
 } from './checklists';
 
 class MemoryStorage implements Storage {
