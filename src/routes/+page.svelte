@@ -805,24 +805,6 @@
 												<button
 													class="btn-icon btn-icon-sm preset-tonal-surface"
 													type="button"
-													title="Add section above"
-													aria-label="Add section above"
-													onclick={() => addSection(sectionIndex)}
-												>
-													<Plus size={16} aria-hidden="true" />
-												</button>
-												<button
-													class="btn-icon btn-icon-sm preset-tonal-surface"
-													type="button"
-													title="Add section below"
-													aria-label="Add section below"
-													onclick={() => addSection(sectionIndex + 1)}
-												>
-													<Plus size={16} aria-hidden="true" />
-												</button>
-												<button
-													class="btn-icon btn-icon-sm preset-tonal-surface"
-													type="button"
 													title="Move section up"
 													aria-label="Move section up"
 													disabled={sectionIndex === 0}
@@ -1007,24 +989,6 @@
 																<button
 																	class="btn-icon btn-icon-sm preset-tonal-surface"
 																	type="button"
-																	title="Add task above"
-																	aria-label="Add task above"
-																	onclick={() => addTask(section, taskIndex)}
-																>
-																	<Plus size={16} aria-hidden="true" />
-																</button>
-																<button
-																	class="btn-icon btn-icon-sm preset-tonal-surface"
-																	type="button"
-																	title="Add task below"
-																	aria-label="Add task below"
-																	onclick={() => addTask(section, taskIndex + 1)}
-																>
-																	<Plus size={16} aria-hidden="true" />
-																</button>
-																<button
-																	class="btn-icon btn-icon-sm preset-tonal-surface"
-																	type="button"
 																	title="Move task up"
 																	aria-label="Move task up"
 																	disabled={taskIndex === 0}
@@ -1066,7 +1030,7 @@
 											</div>
 
 											<button
-												class="btn btn-sm preset-tonal-surface mt-3"
+												class="btn btn-sm preset-tonal-surface mt-3 ml-auto"
 												type="button"
 												onclick={() => addTask(section)}
 											>
@@ -1079,7 +1043,7 @@
 							</Accordion>
 
 							<button
-								class="btn btn-sm preset-tonal-primary self-start"
+								class="btn btn-sm preset-tonal-primary self-end"
 								type="button"
 								onclick={() => addSection()}
 							>
