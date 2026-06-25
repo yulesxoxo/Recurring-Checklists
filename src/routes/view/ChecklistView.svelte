@@ -41,24 +41,6 @@
 
 	let hideCompletedTasks = $state(true);
 
-	function toggleTask(section: ChecklistSection, task: ChecklistTask): void {
-		appState.completions[checklist.id] ??= {};
-		appState.completions[checklist.id][section.id] ??= {};
-
-		if (taskIsDone(section, task)) {
-			delete appState.completions[checklist.id][section.id][task.id];
-		} else {
-			const completedAt = new Date().toISOString();
-			appState.completions[checklist.id][section.id][task.id] = {
-				completedAt,
-				completionLog: [completedAt]
-			};
-		}
-
-		now = new Date();
-		onPersist();
-	}
-
 	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
 		const record = getCompletion(checklist.id, section.id, task.id);
 		if (taskHasCarryover(task)) return bankedTaskStatus(section, task, record).available <= 0;
@@ -67,48 +49,6 @@
 			taskCompletionCount(effectiveTaskSchedule(section, task), record, now) >=
 			taskRepeatCount(task)
 		);
-	}
-
-	function completeTaskUnit(section: ChecklistSection, task: ChecklistTask): void {
-		appState.completions[checklist.id] ??= {};
-		appState.completions[checklist.id][section.id] ??= {};
-
-		const record = getCompletion(checklist.id, section.id, task.id) ?? {};
-		const completedAt = new Date().toISOString();
-
-		if (taskHasCarryover(task)) {
-			const status = bankedTaskStatus(section, task, record);
-			if (status.available <= 0) return;
-
-			appState.completions[checklist.id][section.id][task.id] = {
-				...record,
-				completedAt,
-				completionLog: appendCompletion(record, completedAt),
-				availableCount: status.available - 1,
-				lastAccruedAt: status.lastAccruedAt
-			};
-		} else {
-			const schedule = effectiveTaskSchedule(section, task);
-			const completionCount = taskCompletionCount(schedule, record, now);
-			if (completionCount >= taskRepeatCount(task)) return;
-
-			appState.completions[checklist.id][section.id][task.id] = {
-				completedAt,
-				completionLog: appendCompletion(record, completedAt)
-			};
-		}
-
-		now = new Date();
-		onPersist();
-	}
-
-	function resetTaskUnit(section: ChecklistSection, task: ChecklistTask): void {
-		if (appState.completions[checklist.id]?.[section.id]?.[task.id]) {
-			delete appState.completions[checklist.id][section.id][task.id];
-		}
-
-		now = new Date();
-		onPersist();
 	}
 
 	function getCompletion(
@@ -213,10 +153,6 @@
 		return log;
 	}
 
-	function appendCompletion(record: CompletionRecord | undefined, completedAt: string): string[] {
-		return [...completionLog(record), completedAt].slice(-100);
-	}
-
 	function bankedTaskStatus(
 		section: ChecklistSection,
 		task: ChecklistTask,
@@ -266,61 +202,6 @@
 		}
 
 		return count;
-	}
-
-	function taskUnitStatus(section: ChecklistSection, task: ChecklistTask): string {
-		const completion = getCompletion(checklist.id, section.id, task.id);
-		if (taskHasCarryover(task)) {
-			const status = bankedTaskStatus(section, task, completion);
-			const done = bankedCompletionCount(status, completion);
-			return `${done}/${status.capacity}`;
-		}
-
-		const schedule = effectiveTaskSchedule(section, task);
-		return `${taskCompletionCount(schedule, completion, now)}/${taskRepeatCount(task)}`;
-	}
-
-	function taskUsesUnitControls(task: ChecklistTask): boolean {
-		return taskRepeatCount(task) > 1 || taskHasCarryover(task);
-	}
-
-	function bankedCompletionCount(
-		status: BankedTaskStatus,
-		record: CompletionRecord | undefined
-	): number {
-		if (!status.lastAccruedAt) return completionLog(record).length;
-
-		const accruedAt = new Date(status.lastAccruedAt);
-		if (Number.isNaN(accruedAt.getTime())) return 0;
-
-		return completionLog(record).filter((completedAt) => {
-			const date = new Date(completedAt);
-			return !Number.isNaN(date.getTime()) && date >= accruedAt;
-		}).length;
-	}
-
-	function toggleTaskUnit(section: ChecklistSection, task: ChecklistTask): void {
-		if (taskIsDone(section, task)) {
-			resetTaskUnit(section, task);
-			return;
-		}
-
-		completeTaskUnit(section, task);
-	}
-
-	function toggleTaskUnitRow(
-		event: MouseEvent,
-		section: ChecklistSection,
-		task: ChecklistTask
-	): void {
-		event.preventDefault();
-		toggleTaskUnit(section, task);
-	}
-
-	function taskRowClass(section: ChecklistSection, task: ChecklistTask): string {
-		return taskIsDone(section, task) && !hideCompletedTasks
-			? 'border-surface-800 bg-surface-900 opacity-60 hover:bg-surface-900'
-			: 'border-surface-800 bg-surface-950 hover:bg-surface-800';
 	}
 
 	function updateHideCompleted(details: { checked: boolean }): void {
@@ -382,29 +263,15 @@
 						</p>
 					{:else}
 						{#each tasks as task (task.id)}
-							{@const schedule = effectiveTaskSchedule(section, task)}
-							{@const completion = getCompletion(checklist.id, section.id, task.id)}
-							{@const usesUnitControls = taskUsesUnitControls(task)}
-							{#if usesUnitControls}
-								<ChecklistTaskButton
-									{task}
-									{schedule}
-									{now}
-									{completion}
-									rowClass={taskRowClass(section, task)}
-									countLabel={taskUnitStatus(section, task)}
-									onClick={(event) => toggleTaskUnitRow(event, section, task)}
-								/>
-							{:else}
-								<ChecklistTaskButton
-									{task}
-									{schedule}
-									{now}
-									{completion}
-									rowClass={taskRowClass(section, task)}
-									onClick={() => toggleTask(section, task)}
-								/>
-							{/if}
+							<ChecklistTaskButton
+								bind:appState
+								checklistId={checklist.id}
+								{section}
+								{task}
+								bind:now
+								hideCompleted={hideCompletedTasks}
+								{onPersist}
+							/>
 						{/each}
 					{/if}
 				</div>

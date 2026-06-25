@@ -40,16 +40,14 @@
 						"title": "Cafe - Collect Earnings"
 					},
 					{
-						"title": "New task"
-					},
-					{
 						"title": "Claim Fluffy Cotton",
 						"notes": "Wiener Apartments, Eden Apartments, Fenglin Villa",
 						"schedule": {
 							"frequency": "interval",
 							"intervalMinutes": 1440,
 							"intervalMode": "completion"
-						}
+						},
+						"maxCarryover": 7
 					},
 					{
 						"title": "Claim Anomaly Dailies",
@@ -93,11 +91,13 @@
 						"title": "Ebisu Auction House"
 					},
 					{
-						"title": "Anomaly Pilgrimage 3x"
+						"title": "Anomaly Pilgrimage",
+						"repeatCount": 3
 					},
 					{
 						"title": "Safe Run",
-						"notes": "https://www.youtube.com/watch?v=ycq8-QXTD8Q"
+						"notes": "https://www.youtube.com/watch?v=ycq8-QXTD8Q",
+						"repeatCount": 9
 					}
 				]
 			},
