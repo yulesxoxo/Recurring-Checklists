@@ -177,16 +177,15 @@
 			id: createId(),
 			name,
 			defaultSchedule,
-			tasks: taskTitles.map((title) => createTask(title, defaultSchedule))
+			tasks: taskTitles.map((title) => createTask(title))
 		};
 	}
 
-	function createTask(title: string, schedule: ChecklistTask['schedule']): ChecklistTask {
+	function createTask(title: string): ChecklistTask {
 		return {
 			id: createId(),
 			title,
-			notes: '',
-			schedule: JSON.parse(JSON.stringify(schedule)) as ChecklistTask['schedule']
+			notes: ''
 		};
 	}
 

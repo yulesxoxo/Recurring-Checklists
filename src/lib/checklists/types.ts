@@ -22,7 +22,7 @@ export type ChecklistTask = {
 	id: string;
 	title: string;
 	notes?: string;
-	schedule: RecurringSchedule;
+	schedule?: RecurringSchedule;
 };
 
 export type ChecklistSection = {
@@ -64,7 +64,7 @@ export type PortableChecklistExport = {
 			tasks: Array<{
 				title: string;
 				notes?: string;
-				schedule: RecurringSchedule;
+				schedule?: RecurringSchedule;
 			}>;
 		}>;
 	};

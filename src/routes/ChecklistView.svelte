@@ -6,6 +6,7 @@
 		type ChecklistSection,
 		type ChecklistTask,
 		type CompletionRecord,
+		type RecurringSchedule,
 		countTasks
 	} from '$lib/checklists';
 	import {
@@ -48,7 +49,11 @@
 	}
 
 	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
-		return isTaskComplete(task, getCompletion(checklist.id, section.id, task.id), now);
+		return isTaskComplete(
+			effectiveTaskSchedule(section, task),
+			getCompletion(checklist.id, section.id, task.id),
+			now
+		);
 	}
 
 	function getCompletion(
@@ -60,7 +65,7 @@
 	}
 
 	function isTaskComplete(
-		task: ChecklistTask,
+		schedule: RecurringSchedule,
 		record: CompletionRecord | undefined,
 		reference: Date
 	): boolean {
@@ -69,12 +74,12 @@
 		const completedAt = new Date(record.completedAt);
 		if (Number.isNaN(completedAt.getTime())) return false;
 
-		if (task.schedule.frequency === 'interval' && task.schedule.intervalMode === 'completion') {
-			const expiresAt = intervalCompletionExpiresAt(task.schedule, completedAt);
+		if (schedule.frequency === 'interval' && schedule.intervalMode === 'completion') {
+			const expiresAt = intervalCompletionExpiresAt(schedule, completedAt);
 			return expiresAt !== null && expiresAt > reference;
 		}
 
-		const windowStart = getResetWindowStart(task.schedule, reference);
+		const windowStart = getResetWindowStart(schedule, reference);
 
 		return windowStart !== null && completedAt >= windowStart;
 	}
@@ -84,6 +89,13 @@
 			done: section.tasks.filter((task) => taskIsDone(section, task)).length,
 			total: section.tasks.length
 		};
+	}
+
+	function effectiveTaskSchedule(
+		section: ChecklistSection,
+		task: ChecklistTask
+	): RecurringSchedule {
+		return task.schedule ?? section.defaultSchedule;
 	}
 </script>
 
@@ -131,6 +143,7 @@
 						</p>
 					{:else}
 						{#each section.tasks as task (task.id)}
+							{@const schedule = effectiveTaskSchedule(section, task)}
 							<label
 								class="flex cursor-pointer gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
 							>
@@ -146,14 +159,15 @@
 										<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
 									{/if}
 									<span class="mt-2 block text-xs text-surface-400">
-										{describeSchedule(task.schedule)}
+										{describeSchedule(schedule)}
+										{task.schedule ? '' : ' (section default)'}
 									</span>
-									{#if !(task.schedule.frequency === 'interval' && task.schedule.intervalMode === 'completion')}
+									{#if !(schedule.frequency === 'interval' && schedule.intervalMode === 'completion')}
 										<span class="mt-1 block text-xs text-surface-400">
-											Next reset local: {formatLocalReset(getNextReset(task.schedule, now))}
+											Next reset local: {formatLocalReset(getNextReset(schedule, now))}
 										</span>
 										<span class="mt-1 block text-xs text-surface-400">
-											Next reset UTC: {formatUtcReset(getNextReset(task.schedule, now))}
+											Next reset UTC: {formatUtcReset(getNextReset(schedule, now))}
 										</span>
 									{/if}
 								</span>

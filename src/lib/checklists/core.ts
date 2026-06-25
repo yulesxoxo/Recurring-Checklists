@@ -72,7 +72,7 @@ export function exportPortableChecklist(checklist: Checklist): PortableChecklist
 				tasks: section.tasks.map((task) => ({
 					title: task.title,
 					...(task.notes ? { notes: task.notes } : {}),
-					schedule: { ...task.schedule }
+					...(task.schedule ? { schedule: { ...task.schedule } } : {})
 				}))
 			}))
 		}
@@ -162,8 +162,9 @@ export function importPortableChecklists(
 				};
 			}
 
-			const schedule = normalizePortableSchedule(task.schedule, options);
-			if (!schedule) {
+			const schedule =
+				task.schedule === undefined ? undefined : normalizePortableSchedule(task.schedule, options);
+			if (task.schedule !== undefined && !schedule) {
 				return {
 					ok: false,
 					error: `Task ${taskIndex + 1} in section "${section.name}" has an unsupported or malformed schedule.`
@@ -174,7 +175,7 @@ export function importPortableChecklists(
 				id: idFactory(),
 				title: task.title.trim() || 'Untitled task',
 				notes: task.notes?.trim() || undefined,
-				schedule
+				...(schedule ? { schedule } : {})
 			});
 		}
 

@@ -92,13 +92,13 @@ function normalizeTask(value: unknown): ChecklistTask | null {
 	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string')
 		return null;
 
-	const schedule = normalizeSchedule(value.schedule);
-	if (!schedule) return null;
+	const schedule = value.schedule === undefined ? undefined : normalizeSchedule(value.schedule);
+	if (value.schedule !== undefined && !schedule) return null;
 
 	return {
 		id: value.id,
 		title: value.title,
 		notes: typeof value.notes === 'string' ? value.notes : undefined,
-		schedule
+		...(schedule ? { schedule } : {})
 	};
 }

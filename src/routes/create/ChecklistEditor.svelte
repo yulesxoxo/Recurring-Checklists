@@ -112,7 +112,7 @@
 					...task,
 					title: task.title.trim() || 'Untitled task',
 					notes: task.notes?.trim() || undefined,
-					schedule: normalizeSchedule(task.schedule) ?? cloneSchedule(section.defaultSchedule)
+					schedule: task.schedule ? (normalizeSchedule(task.schedule) ?? undefined) : undefined
 				}))
 			}))
 		};
@@ -148,11 +148,7 @@
 	}
 
 	function addTask(section: ChecklistSection, position: number | undefined = undefined): void {
-		section.tasks = insertArrayItem(
-			section.tasks,
-			createTask('New task', section.defaultSchedule),
-			position
-		);
+		section.tasks = insertArrayItem(section.tasks, createTask('New task'), position);
 	}
 
 	function removeTask(section: ChecklistSection, taskId: string): void {
@@ -293,21 +289,35 @@
 			id: createId(),
 			name,
 			defaultSchedule,
-			tasks: [createTask('New task', defaultSchedule)]
+			tasks: [createTask('New task')]
 		};
 	}
 
-	function createTask(title: string, schedule: RecurringSchedule): ChecklistTask {
+	function createTask(title: string): ChecklistTask {
 		return {
 			id: createId(),
 			title,
-			notes: '',
-			schedule: cloneSchedule(schedule)
+			notes: ''
 		};
 	}
 
 	function cloneSchedule(schedule: RecurringSchedule): RecurringSchedule {
 		return JSON.parse(JSON.stringify(schedule)) as RecurringSchedule;
+	}
+
+	function effectiveTaskSchedule(
+		task: ChecklistTask,
+		section: ChecklistSection
+	): RecurringSchedule {
+		return task.schedule ?? section.defaultSchedule;
+	}
+
+	function setTaskCustomSchedule(
+		task: ChecklistTask,
+		section: ChecklistSection,
+		custom: boolean
+	): void {
+		task.schedule = custom ? cloneSchedule(effectiveTaskSchedule(task, section)) : undefined;
 	}
 
 	function cloneChecklist(value: Checklist): Checklist {
@@ -722,8 +732,28 @@
 												placeholder="Optional notes"></textarea>
 										</label>
 										<div class="rounded-base border border-surface-800 bg-surface-950 p-3">
-											<h5 class="mb-3 text-sm font-semibold text-surface-300">Task schedule</h5>
-											{@render scheduleEditor(task.schedule, `${task.id}:schedule`)}
+											<div
+												class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+											>
+												<h5 class="text-sm font-semibold text-surface-300">Task schedule</h5>
+												<label class="flex items-center gap-2 text-sm text-surface-300">
+													<input
+														class="checkbox"
+														type="checkbox"
+														checked={task.schedule !== undefined}
+														onchange={(event) =>
+															setTaskCustomSchedule(task, section, event.currentTarget.checked)}
+													/>
+													<span>Custom schedule</span>
+												</label>
+											</div>
+											{#if task.schedule}
+												{@render scheduleEditor(task.schedule, `${task.id}:schedule`)}
+											{:else}
+												<p class="text-sm text-surface-400">
+													Uses section default: {describeSchedule(section.defaultSchedule)}
+												</p>
+											{/if}
 										</div>
 									</div>
 								{/each}

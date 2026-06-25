@@ -431,6 +431,32 @@ describe('portable imports', () => {
 		expect(result.checklist.sections[0].tasks[0].id).toBe('task-new');
 	});
 
+	it('allows imported tasks to use the section default schedule', () => {
+		const result = importPortableChecklists(
+			JSON.stringify({
+				version: 1,
+				checklist: {
+					name: 'Operations',
+					description: '',
+					sections: [
+						{
+							name: 'Daily',
+							defaultSchedule: {
+								frequency: 'daily',
+								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+							},
+							tasks: [{ title: 'Review queue' }]
+						}
+					]
+				}
+			})
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.checklist.sections[0].tasks[0].schedule).toBeUndefined();
+	});
+
 	it('rejects malformed schedules before import', () => {
 		const result = importPortableChecklists(
 			JSON.stringify({
