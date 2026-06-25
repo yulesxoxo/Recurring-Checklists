@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import {
 		ClipboardList,
 		Copy,
@@ -11,40 +12,199 @@
 		Upload
 	} from '@lucide/svelte';
 	import {
+		DIRECT_LINK_PARAM,
 		type AppState,
 		type Checklist,
-		countTasks
+		type ChecklistSection,
+		type ChecklistTask,
+		type Frequency,
+		countTasks,
+		exportPortableChecklist,
+		importPortableChecklists,
+		linkKeyConflict,
+		normalizeSchedule
 	} from '$lib/checklists';
+	import { alignDateToWeekday, todayUtc } from '$lib/date-time';
+	import { createId } from '$lib/id';
 
 	let {
-		appState,
-		importInput = $bindable<HTMLInputElement | undefined>(),
-		importFeedback,
-		copyFeedback,
-		onImportDefinitions,
-		onOpenImportPicker,
-		onAddStarterTemplate,
-		onCreateChecklist,
-		onEnterChecklist,
-		onCopyChecklistLink,
-		onExportDefinition,
-		onEditChecklist,
-		onDeleteChecklist
+		appState = $bindable<AppState>(),
+		onPersist,
+		onEnterChecklist
 	}: {
 		appState: AppState;
-		importInput: HTMLInputElement | undefined;
-		importFeedback: string;
-		copyFeedback: string;
-		onImportDefinitions: (event: Event) => Promise<void>;
-		onOpenImportPicker: () => void;
-		onAddStarterTemplate: () => void;
-		onCreateChecklist: () => void;
 		onEnterChecklist: (checklist: Checklist) => void;
-		onCopyChecklistLink: (checklist: Checklist) => Promise<void>;
-		onExportDefinition: (checklist: Checklist) => void;
-		onEditChecklist: (checklist: Checklist) => void;
-		onDeleteChecklist: (checklist: Checklist) => void;
+		onPersist: () => void;
 	} = $props();
+
+	let importInput = $state<HTMLInputElement>();
+	let importFeedback = $state('');
+	let copyFeedback = $state('');
+
+	function checklistUrl(checklist: Checklist): string {
+		const url = new URL(window.location.href);
+		url.pathname = '/';
+		url.searchParams.set(DIRECT_LINK_PARAM, checklist.linkKey || checklist.id);
+
+		const search = url.searchParams.toString();
+		return `${url.origin}?${search}`;
+	}
+
+	async function copyChecklistLink(checklist: Checklist): Promise<void> {
+		copyFeedback = '';
+		await navigator.clipboard.writeText(checklistUrl(checklist));
+		copyFeedback = `Copied link for "${checklist.name}".`;
+	}
+
+	function exportDefinition(checklist: Checklist): void {
+		importFeedback = '';
+		const portable = exportPortableChecklist(checklist);
+		const blob = new Blob([JSON.stringify(portable, null, 2)], { type: 'application/json' });
+		const url = URL.createObjectURL(blob);
+		const link = document.createElement('a');
+		link.href = url;
+		link.download = `${filenameSlug(checklist.name)}-checklist.json`;
+		link.click();
+		URL.revokeObjectURL(url);
+	}
+
+	function openImportPicker(): void {
+		importInput?.click();
+	}
+
+	async function importDefinitions(event: Event): Promise<void> {
+		importFeedback = '';
+		const input = event.currentTarget as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file) return;
+
+		const result = importPortableChecklists(await file.text(), {
+			allowDevFrequencies: import.meta.env.DEV
+		});
+
+		if (!result.ok) {
+			importFeedback = result.error;
+			return;
+		}
+
+		const conflict = linkKeyConflict(appState.checklists, result.checklist.linkKey);
+		if (conflict) {
+			importFeedback = `Imported checklist link key is already used by "${conflict.name}".`;
+			return;
+		}
+
+		appState.checklists = [...appState.checklists, result.checklist];
+		importFeedback = `Imported "${result.checklist.name}".`;
+		onPersist();
+	}
+
+	function createChecklist(): void {
+		void goto('/create');
+	}
+
+	function editChecklist(checklist: Checklist): void {
+		void goto(`/create?edit=${encodeURIComponent(checklist.id)}`);
+	}
+
+	function deleteChecklist(checklist: Checklist): void {
+		if (
+			!window.confirm(`Delete "${checklist.name}"? Completion history for it will also be removed.`)
+		) {
+			return;
+		}
+
+		appState.checklists = appState.checklists.filter((item) => item.id !== checklist.id);
+		delete appState.completions[checklist.id];
+		onPersist();
+	}
+
+	function addStarterTemplate(): void {
+		const checklist: Checklist = {
+			id: createId(),
+			name: 'NTE Recurring Checklist',
+			description: 'Daily, weekly, and bi-weekly operating checks with UTC reset windows.',
+			linkKey: 'NTE',
+			sections: [
+				{
+					...createSection('Daily', 'daily'),
+					tasks: [
+						createTask('Review open exceptions'),
+						createTask('Confirm required reports were generated'),
+						createTask('Record follow-ups for blocked items')
+					]
+				},
+				{
+					...createSection('Weekly', 'weekly'),
+					tasks: [
+						createTask('Audit recurring checklist coverage'),
+						createTask('Review aged unresolved items'),
+						createTask('Update weekly summary')
+					]
+				},
+				{
+					...createSection('Bi-Weekly', 'biweekly'),
+					tasks: [
+						createTask('Review process drift'),
+						createTask('Refresh escalation owners'),
+						createTask('Validate bi-weekly reporting inputs')
+					]
+				}
+			]
+		};
+
+		const conflict = linkKeyConflict(appState.checklists, checklist.linkKey);
+		if (conflict) {
+			importFeedback = `The starter template link key is already used by "${conflict.name}".`;
+			return;
+		}
+
+		appState.checklists = [...appState.checklists, checklist];
+		onPersist();
+	}
+
+	function createSection(name: string, frequency: Frequency): ChecklistSection {
+		const resetWeekday = frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined;
+
+		return {
+			id: createId(),
+			name,
+			schedule: normalizeSchedule(
+				{
+					frequency,
+					resetTimeUtc: '05:00',
+					resetWeekday,
+					anchorDate:
+						frequency === 'biweekly'
+							? alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')
+							: undefined
+				},
+				{ allowDevFrequencies: import.meta.env.DEV }
+			) ?? {
+				frequency: 'daily',
+				resetTimeUtc: '05:00'
+			},
+			tasks: [createTask('New task')]
+		};
+	}
+
+	function createTask(title: string): ChecklistTask {
+		return {
+			id: createId(),
+			title,
+			notes: ''
+		};
+	}
+
+	function filenameSlug(value: string): string {
+		return (
+			value
+				.trim()
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-')
+				.replace(/^-|-$/g, '') || 'checklist'
+		);
+	}
 </script>
 
 <section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -64,17 +224,17 @@
 				class="hidden"
 				type="file"
 				accept="application/json,.json"
-				onchange={onImportDefinitions}
+				onchange={importDefinitions}
 			/>
-			<button class="btn preset-tonal-surface" type="button" onclick={onOpenImportPicker}>
+			<button class="btn preset-tonal-surface" type="button" onclick={openImportPicker}>
 				<Upload size={18} aria-hidden="true" />
 				Import
 			</button>
-			<button class="btn preset-tonal-surface" type="button" onclick={onAddStarterTemplate}>
+			<button class="btn preset-tonal-surface" type="button" onclick={addStarterTemplate}>
 				<RotateCcw size={18} aria-hidden="true" />
 				NTE Template
 			</button>
-			<button class="btn preset-filled-primary-500" type="button" onclick={onCreateChecklist}>
+			<button class="btn preset-filled-primary-500" type="button" onclick={createChecklist}>
 				<Plus size={18} aria-hidden="true" />
 				Create new Checklist
 			</button>
@@ -149,7 +309,7 @@
 										type="button"
 										title="Copy direct link"
 										aria-label="Copy direct link"
-										onclick={() => onCopyChecklistLink(checklist)}
+										onclick={() => copyChecklistLink(checklist)}
 									>
 										<Copy size={16} aria-hidden="true" />
 									</button>
@@ -158,7 +318,7 @@
 										type="button"
 										title="Export checklist"
 										aria-label="Export checklist"
-										onclick={() => onExportDefinition(checklist)}
+										onclick={() => exportDefinition(checklist)}
 									>
 										<Download size={16} aria-hidden="true" />
 									</button>
@@ -167,7 +327,7 @@
 										type="button"
 										title="Edit checklist"
 										aria-label="Edit checklist"
-										onclick={() => onEditChecklist(checklist)}
+										onclick={() => editChecklist(checklist)}
 									>
 										<Pencil size={16} aria-hidden="true" />
 									</button>
@@ -176,7 +336,7 @@
 										type="button"
 										title="Delete checklist"
 										aria-label="Delete checklist"
-										onclick={() => onDeleteChecklist(checklist)}
+										onclick={() => deleteChecklist(checklist)}
 									>
 										<Trash2 size={16} aria-hidden="true" />
 									</button>

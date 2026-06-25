@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { ArrowLeft } from '@lucide/svelte';
 	import ChecklistManage from './ChecklistManage.svelte';
@@ -8,29 +7,16 @@
 		DIRECT_LINK_PARAM,
 		type AppState,
 		type Checklist,
-		type ChecklistSection,
-		type ChecklistTask,
-		type CompletionRecord,
-		type Frequency,
 		createEmptyAppState,
-		exportPortableChecklist,
-		importPortableChecklists,
-		linkKeyConflict,
 		loadAppState,
-		normalizeSchedule,
 		saveAppState
 	} from '$lib/checklists';
-	import { alignDateToWeekday, getResetWindowStart, todayUtc } from '$lib/date-time';
-	import { createId } from '$lib/id';
 
 	type Mode = 'manage' | 'view';
 
 	let appState = $state<AppState>(createEmptyAppState());
 	let mode = $state<Mode>('manage');
 	let selectedChecklistId = $state<string | null>(null);
-	let importInput = $state<HTMLInputElement>();
-	let importFeedback = $state('');
-	let copyFeedback = $state('');
 	let mounted = false;
 	let now = $state(new Date());
 
@@ -111,15 +97,6 @@
 		window.history[method]({}, '', url);
 	}
 
-	function checklistUrl(checklist: Checklist): string {
-		const url = new URL(window.location.href);
-		url.pathname = '/';
-		url.searchParams.set(DIRECT_LINK_PARAM, directLinkValue(checklist));
-
-		const search = url.searchParams.toString();
-		return `${url.origin}?${search}`;
-	}
-
 	function checklistIdFromSearch(search: string, checklists: Checklist[]): string | null {
 		const params = new URLSearchParams(search);
 		const directValue = params.get(DIRECT_LINK_PARAM);
@@ -136,80 +113,6 @@
 		return checklist.linkKey || checklist.id;
 	}
 
-	async function copyChecklistLink(checklist: Checklist): Promise<void> {
-		copyFeedback = '';
-		await navigator.clipboard.writeText(checklistUrl(checklist));
-		copyFeedback = `Copied link for "${checklist.name}".`;
-	}
-
-	function exportDefinition(checklist: Checklist): void {
-		importFeedback = '';
-		const portable = exportPortableChecklist(checklist);
-		const blob = new Blob([JSON.stringify(portable, null, 2)], { type: 'application/json' });
-		const url = URL.createObjectURL(blob);
-		const link = document.createElement('a');
-		link.href = url;
-		link.download = `${filenameSlug(checklist.name)}-checklist.json`;
-		link.click();
-		URL.revokeObjectURL(url);
-	}
-
-	function openImportPicker(): void {
-		importInput?.click();
-	}
-
-	async function importDefinitions(event: Event): Promise<void> {
-		importFeedback = '';
-		const input = event.currentTarget as HTMLInputElement;
-		const file = input.files?.[0];
-		input.value = '';
-		if (!file) return;
-
-		const result = importPortableChecklists(await file.text(), {
-			allowDevFrequencies: import.meta.env.DEV
-		});
-
-		if (!result.ok) {
-			importFeedback = result.error;
-			return;
-		}
-
-		const conflict = linkKeyConflict(appState.checklists, result.checklist.linkKey);
-		if (conflict) {
-			importFeedback = `Imported checklist link key is already used by "${conflict.name}".`;
-			return;
-		}
-
-		appState.checklists = [...appState.checklists, result.checklist];
-		importFeedback = `Imported "${result.checklist.name}".`;
-		persist();
-	}
-
-	function createChecklist(): void {
-		void goto('/create');
-	}
-
-	function editChecklist(checklist: Checklist): void {
-		void goto(`/create?edit=${encodeURIComponent(checklist.id)}`);
-	}
-
-	function deleteChecklist(checklist: Checklist): void {
-		if (
-			!window.confirm(`Delete "${checklist.name}"? Completion history for it will also be removed.`)
-		) {
-			return;
-		}
-
-		appState.checklists = appState.checklists.filter((item) => item.id !== checklist.id);
-		delete appState.completions[checklist.id];
-		if (selectedChecklistId === checklist.id) {
-			selectedChecklistId = null;
-			mode = 'manage';
-			updateManagePath();
-		}
-		persist();
-	}
-
 	function enterChecklist(checklist: Checklist, updateUrl = true): void {
 		selectedChecklistId = checklist.id;
 		mode = 'view';
@@ -223,147 +126,6 @@
 		now = new Date();
 		updateManagePath();
 	}
-
-	function addStarterTemplate(): void {
-		const checklist: Checklist = {
-			id: createId(),
-			name: 'NTE Recurring Checklist',
-			description: 'Daily, weekly, and bi-weekly operating checks with UTC reset windows.',
-			linkKey: 'NTE',
-			sections: [
-				{
-					...createSection('Daily', 'daily'),
-					tasks: [
-						createTask('Review open exceptions'),
-						createTask('Confirm required reports were generated'),
-						createTask('Record follow-ups for blocked items')
-					]
-				},
-				{
-					...createSection('Weekly', 'weekly'),
-					tasks: [
-						createTask('Audit recurring checklist coverage'),
-						createTask('Review aged unresolved items'),
-						createTask('Update weekly summary')
-					]
-				},
-				{
-					...createSection('Bi-Weekly', 'biweekly'),
-					tasks: [
-						createTask('Review process drift'),
-						createTask('Refresh escalation owners'),
-						createTask('Validate bi-weekly reporting inputs')
-					]
-				}
-			]
-		};
-
-		const conflict = linkKeyConflict(appState.checklists, checklist.linkKey);
-		if (conflict) {
-			importFeedback = `The starter template link key is already used by "${conflict.name}".`;
-			return;
-		}
-
-		appState.checklists = [...appState.checklists, checklist];
-		persist();
-	}
-
-	function toggleTask(section: ChecklistSection, task: ChecklistTask, checked: boolean): void {
-		if (!selectedChecklist) return;
-
-		appState.completions[selectedChecklist.id] ??= {};
-		appState.completions[selectedChecklist.id][section.id] ??= {};
-
-		if (checked) {
-			appState.completions[selectedChecklist.id][section.id][task.id] = {
-				completedAt: new Date().toISOString()
-			};
-		} else {
-			delete appState.completions[selectedChecklist.id][section.id][task.id];
-		}
-
-		now = new Date();
-		persist();
-	}
-
-	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
-		if (!selectedChecklist) return false;
-
-		return isTaskComplete(section, getCompletion(selectedChecklist.id, section.id, task.id), now);
-	}
-
-	function getCompletion(
-		checklistId: string,
-		sectionId: string,
-		taskId: string
-	): CompletionRecord | undefined {
-		return appState.completions[checklistId]?.[sectionId]?.[taskId];
-	}
-
-	function isTaskComplete(
-		section: ChecklistSection,
-		record: CompletionRecord | undefined,
-		reference: Date
-	): boolean {
-		if (!record) return false;
-
-		const completedAt = new Date(record.completedAt);
-		const windowStart = getResetWindowStart(section.schedule, reference);
-
-		return (
-			!Number.isNaN(completedAt.getTime()) && windowStart !== null && completedAt >= windowStart
-		);
-	}
-
-	function sectionProgress(section: ChecklistSection): { done: number; total: number } {
-		return {
-			done: section.tasks.filter((task) => taskIsDone(section, task)).length,
-			total: section.tasks.length
-		};
-	}
-
-	function createSection(name: string, frequency: Frequency): ChecklistSection {
-		const resetWeekday = frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined;
-
-		return {
-			id: createId(),
-			name,
-			schedule: normalizeSchedule(
-				{
-					frequency,
-					resetTimeUtc: '05:00',
-					resetWeekday,
-					anchorDate:
-						frequency === 'biweekly'
-							? alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')
-							: undefined
-				},
-				{ allowDevFrequencies: import.meta.env.DEV }
-			) ?? {
-				frequency: 'daily',
-				resetTimeUtc: '05:00'
-			},
-			tasks: [createTask('New task')]
-		};
-	}
-
-	function createTask(title: string): ChecklistTask {
-		return {
-			id: createId(),
-			title,
-			notes: ''
-		};
-	}
-
-	function filenameSlug(value: string): string {
-		return (
-			value
-				.trim()
-				.toLowerCase()
-				.replace(/[^a-z0-9]+/g, '-')
-				.replace(/^-|-$/g, '') || 'checklist'
-		);
-	}
 </script>
 
 <svelte:head>
@@ -376,29 +138,14 @@
 
 <main class="min-h-screen bg-surface-950 text-surface-50">
 	{#if mode === 'manage'}
-		<ChecklistManage
-			{appState}
-			bind:importInput
-			{importFeedback}
-			{copyFeedback}
-			onImportDefinitions={importDefinitions}
-			onOpenImportPicker={openImportPicker}
-			onAddStarterTemplate={addStarterTemplate}
-			onCreateChecklist={createChecklist}
-			onEnterChecklist={enterChecklist}
-			onCopyChecklistLink={copyChecklistLink}
-			onExportDefinition={exportDefinition}
-			onEditChecklist={editChecklist}
-			onDeleteChecklist={deleteChecklist}
-		/>
+		<ChecklistManage bind:appState onPersist={persist} onEnterChecklist={enterChecklist} />
 	{:else if selectedChecklist}
 		<ChecklistView
+			bind:appState
 			checklist={selectedChecklist}
-			{now}
+			bind:now
 			onBack={backToManage}
-			onToggleTask={toggleTask}
-			{taskIsDone}
-			{sectionProgress}
+			onPersist={persist}
 		/>
 	{:else}
 		<section class="mx-auto max-w-3xl px-4 py-10">

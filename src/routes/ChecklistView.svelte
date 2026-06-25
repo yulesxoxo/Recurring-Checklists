@@ -1,30 +1,85 @@
 <script lang="ts">
 	import { ArrowLeft, CheckCircle2 } from '@lucide/svelte';
 	import {
+		type AppState,
 		type Checklist,
 		type ChecklistSection,
 		type ChecklistTask,
+		type CompletionRecord,
 		countTasks,
 		titleCase
 	} from '$lib/checklists';
-	import { describeSchedule, formatLocalReset, formatUtcReset, getNextReset } from '$lib/date-time';
+	import {
+		describeSchedule,
+		formatLocalReset,
+		formatUtcReset,
+		getNextReset,
+		getResetWindowStart
+	} from '$lib/date-time';
 
 	let {
+		appState = $bindable<AppState>(),
 		checklist,
-		now,
+		now = $bindable<Date>(),
 		onBack,
-		onToggleTask,
-		taskIsDone,
-		sectionProgress
+		onPersist
 	}: {
+		appState: AppState;
 		checklist: Checklist;
 		now: Date;
 		onBack: () => void;
-		onToggleTask: (section: ChecklistSection, task: ChecklistTask, checked: boolean) => void;
-		taskIsDone: (section: ChecklistSection, task: ChecklistTask) => boolean;
-		sectionProgress: (section: ChecklistSection) => { done: number; total: number };
+		onPersist: () => void;
 	} = $props();
 
+	function toggleTask(section: ChecklistSection, task: ChecklistTask, checked: boolean): void {
+		appState.completions[checklist.id] ??= {};
+		appState.completions[checklist.id][section.id] ??= {};
+
+		if (checked) {
+			appState.completions[checklist.id][section.id][task.id] = {
+				completedAt: new Date().toISOString()
+			};
+		} else {
+			delete appState.completions[checklist.id][section.id][task.id];
+		}
+
+		now = new Date();
+		onPersist();
+	}
+
+	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
+		return isTaskComplete(section, getCompletion(checklist.id, section.id, task.id), now);
+	}
+
+	function getCompletion(
+		checklistId: string,
+		sectionId: string,
+		taskId: string
+	): CompletionRecord | undefined {
+		return appState.completions[checklistId]?.[sectionId]?.[taskId];
+	}
+
+	function isTaskComplete(
+		section: ChecklistSection,
+		record: CompletionRecord | undefined,
+		reference: Date
+	): boolean {
+		if (!record) return false;
+
+		const completedAt = new Date(record.completedAt);
+		const windowStart = getResetWindowStart(section.schedule, reference);
+
+		return (
+			!Number.isNaN(completedAt.getTime()) && windowStart !== null && completedAt >= windowStart
+		);
+	}
+
+	function sectionProgress(section: ChecklistSection): { done: number; total: number } {
+		return {
+			done: section.tasks.filter((task) => taskIsDone(section, task)).length,
+			total: section.tasks.length
+		};
+	}
 </script>
 
 <section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -88,7 +143,7 @@
 									class="checkbox mt-1"
 									type="checkbox"
 									checked={taskIsDone(section, task)}
-									onchange={(event) => onToggleTask(section, task, event.currentTarget.checked)}
+									onchange={(event) => toggleTask(section, task, event.currentTarget.checked)}
 								/>
 								<span class="min-w-0 flex-1">
 									<span class="block font-medium text-surface-50">{task.title}</span>
