@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { CheckCircle2, Plus } from '@lucide/svelte';
+	import { Switch } from '@skeletonlabs/skeleton-svelte';
+	import { CheckCircle2 } from '@lucide/svelte';
 	import {
 		type AppState,
 		type Checklist,
@@ -36,6 +37,8 @@
 		capacity: number;
 		lastAccruedAt?: string;
 	};
+
+	let hideCompletedTasks = $state(true);
 
 	function toggleTask(section: ChecklistSection, task: ChecklistTask, checked: boolean): void {
 		appState.completions[checklist.id] ??= {};
@@ -98,6 +101,15 @@
 		onPersist();
 	}
 
+	function resetTaskUnit(section: ChecklistSection, task: ChecklistTask): void {
+		if (appState.completions[checklist.id]?.[section.id]?.[task.id]) {
+			delete appState.completions[checklist.id][section.id][task.id];
+		}
+
+		now = new Date();
+		onPersist();
+	}
+
 	function getCompletion(
 		checklistId: string,
 		sectionId: string,
@@ -111,6 +123,12 @@
 			done: section.tasks.filter((task) => taskIsDone(section, task)).length,
 			total: section.tasks.length
 		};
+	}
+
+	function visibleTasks(section: ChecklistSection): ChecklistTask[] {
+		return hideCompletedTasks
+			? section.tasks.filter((task) => !taskIsDone(section, task))
+			: section.tasks;
 	}
 
 	function effectiveTaskSchedule(
@@ -269,11 +287,11 @@
 		if (taskHasCarryover(task)) {
 			const status = bankedTaskStatus(section, task, completion);
 			const done = bankedCompletionCount(status, completion);
-			return `${done} done / ${status.available} available`;
+			return `${done}/${status.capacity}`;
 		}
 
 		const schedule = effectiveTaskSchedule(section, task);
-		return `${taskCompletionCount(schedule, completion, now)} / ${taskRepeatCount(task)} done`;
+		return `${taskCompletionCount(schedule, completion, now)}/${taskRepeatCount(task)}`;
 	}
 
 	function taskUsesUnitControls(task: ChecklistTask): boolean {
@@ -294,16 +312,43 @@
 			return !Number.isNaN(date.getTime()) && date >= accruedAt;
 		}).length;
 	}
+
+	function toggleTaskUnitRow(
+		event: MouseEvent,
+		section: ChecklistSection,
+		task: ChecklistTask
+	): void {
+		event.preventDefault();
+
+		if (taskIsDone(section, task)) {
+			resetTaskUnit(section, task);
+			return;
+		}
+
+		completeTaskUnit(section, task);
+	}
+
+	function updateHideCompleted(details: { checked: boolean }): void {
+		hideCompletedTasks = details.checked;
+	}
 </script>
 
 <div class="grid gap-6">
-	<div class="flex justify-end">
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+		<Switch checked={hideCompletedTasks} onCheckedChange={updateHideCompleted}>
+			<Switch.Control>
+				<Switch.Thumb />
+			</Switch.Control>
+			<Switch.Label>Hide completed</Switch.Label>
+			<Switch.HiddenInput />
+		</Switch>
 		<span class="badge preset-tonal-primary">{countTasks(checklist)} tasks</span>
 	</div>
 
 	<div class="grid gap-5">
 		{#each checklist.sections as section (section.id)}
 			{@const progress = sectionProgress(section)}
+			{@const tasks = visibleTasks(section)}
 			<section class="rounded-container border border-surface-800 bg-surface-900 p-4 shadow-sm">
 				<div
 					class="flex flex-col gap-3 border-b border-surface-800 pb-4 md:flex-row md:items-start md:justify-between"
@@ -334,23 +379,36 @@
 						>
 							This section has no tasks.
 						</p>
+					{:else if tasks.length === 0}
+						<p
+							class="rounded-base border border-dashed border-surface-700 p-4 text-sm text-surface-400"
+						>
+							All tasks in this section are completed.
+						</p>
 					{:else}
-						{#each section.tasks as task (task.id)}
+						{#each tasks as task (task.id)}
 							{@const schedule = effectiveTaskSchedule(section, task)}
 							{@const completion = getCompletion(checklist.id, section.id, task.id)}
 							{@const clearTime = completionIntervalClearTime(schedule, completion)}
 							{@const usesUnitControls = taskUsesUnitControls(task)}
 							{#if usesUnitControls}
-								<article
-									class="grid gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+								<label
+									class="flex cursor-pointer select-none gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
+									onclick={(event) => toggleTaskUnitRow(event, section, task)}
 								>
-									<div class="min-w-0 flex-1">
-										<div class="flex flex-wrap items-center gap-2">
+									<input
+										class="checkbox mt-1"
+										type="checkbox"
+										checked={taskIsDone(section, task)}
+										aria-label={`${task.title} attempts ${taskUnitStatus(section, task)}`}
+										readonly
+									/>
+									<span class="min-w-0 flex-1">
+										<span class="flex flex-wrap items-center gap-2">
 											<span class="font-medium text-surface-50">{task.title}</span>
-											{#if taskIsDone(section, task)}
-												<span class="badge preset-tonal-success">Done</span>
-											{/if}
-										</div>
+											<span class="badge preset-tonal-primary">{taskUnitStatus(section, task)}</span
+											>
+										</span>
 										{#if task.notes}
 											<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
 										{/if}
@@ -370,27 +428,11 @@
 												Next reset: {formatLocalReset(getNextReset(schedule, now))}
 											</span>
 										{/if}
-									</div>
-									<div class="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
-										<span class="text-sm font-medium text-surface-300">
-											{taskUnitStatus(section, task)}
-										</span>
-										<button
-											class="btn btn-sm preset-filled-primary-500"
-											type="button"
-											title="Add one completion"
-											aria-label={`Add one completion for ${task.title}`}
-											disabled={taskIsDone(section, task)}
-											onclick={() => completeTaskUnit(section, task)}
-										>
-											<Plus size={16} aria-hidden="true" />
-											<span>Done</span>
-										</button>
-									</div>
-								</article>
+									</span>
+								</label>
 							{:else}
 								<label
-									class="flex cursor-pointer gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
+									class="flex cursor-pointer select-none gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
 								>
 									<input
 										class="checkbox mt-1"
