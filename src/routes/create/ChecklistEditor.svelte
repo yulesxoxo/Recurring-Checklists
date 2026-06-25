@@ -5,6 +5,7 @@
 	import { Accordion } from '@skeletonlabs/skeleton-svelte';
 	import { onMount } from 'svelte';
 	import ChecklistNotFound from '../ChecklistNotFound.svelte';
+	import SkeletonDatePicker from './SkeletonDatePicker.svelte';
 	import {
 		DIRECT_LINK_PARAM,
 		type Checklist,
@@ -32,7 +33,6 @@
 		formatUtcReset,
 		getNextReset,
 		getResetWindowStart,
-		normalizeUtcDateTimeInput,
 		scheduleInputTime,
 		scheduleInputTimeToUtc,
 		scheduleResetTimeUtc,
@@ -253,7 +253,10 @@
 	}
 
 	function updateIntervalAnchor(schedule: RecurringSchedule, value: string): void {
-		schedule.anchorDateTimeUtc = normalizeUtcDateTimeInput(value) ?? schedule.anchorDateTimeUtc;
+		const date = new Date(`${value.endsWith('Z') ? value : `${value}:00.000Z`}`);
+		if (!Number.isNaN(date.getTime())) {
+			schedule.anchorDateTimeUtc = date.toISOString();
+		}
 	}
 
 	function createChecklistDraft(): Checklist {
@@ -382,6 +385,22 @@
 
 		return `${schedule.anchorDateTimeUtc?.slice(0, 10) ?? todayUtc()}T${resetTimeUtc}:00.000Z`;
 	}
+
+	function intervalAnchorDate(schedule: RecurringSchedule): string {
+		return utcDateTimeToInputValue(schedule.anchorDateTimeUtc).slice(0, 10);
+	}
+
+	function intervalAnchorTime(schedule: RecurringSchedule): string {
+		return utcDateTimeToInputValue(schedule.anchorDateTimeUtc).slice(11, 16);
+	}
+
+	function updateIntervalAnchorDate(schedule: RecurringSchedule, date: string): void {
+		updateIntervalAnchor(schedule, `${date}T${intervalAnchorTime(schedule)}`);
+	}
+
+	function updateIntervalAnchorTime(schedule: RecurringSchedule, time: string): void {
+		updateIntervalAnchor(schedule, `${intervalAnchorDate(schedule)}T${time}`);
+	}
 </script>
 
 {#snippet scheduleEditor(schedule: RecurringSchedule, scheduleKey: string)}
@@ -479,15 +498,25 @@
 		</label>
 
 		{#if schedule.intervalMode !== 'completion'}
-			<label class="label mt-3">
+			<div class="label mt-3">
 				<span class="label-text">Anchor date/time UTC</span>
-				<input
-					class="input"
-					type="datetime-local"
-					value={utcDateTimeToInputValue(schedule.anchorDateTimeUtc)}
-					onchange={(event) => updateIntervalAnchor(schedule, event.currentTarget.value)}
-				/>
-			</label>
+				<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+					<SkeletonDatePicker
+						label="Anchor date"
+						value={intervalAnchorDate(schedule)}
+						onChange={(date) => updateIntervalAnchorDate(schedule, date)}
+					/>
+					<label class="label">
+						<span class="label-text">Anchor time UTC</span>
+						<input
+							class="input"
+							type="time"
+							value={intervalAnchorTime(schedule)}
+							onchange={(event) => updateIntervalAnchorTime(schedule, event.currentTarget.value)}
+						/>
+					</label>
+				</div>
+			</div>
 		{/if}
 	{/if}
 
@@ -507,18 +536,15 @@
 			</label>
 
 			{#if schedule.frequency === 'biweekly'}
-				<label class="label">
-					<span class="label-text">Anchor date</span>
-					<input
-						class="input"
-						type="date"
+				<div class="label">
+					<SkeletonDatePicker
+						label="Anchor date"
 						min={dateInputMinForWeekday(schedule.resetWeekday ?? 'monday')}
-						step="7"
 						value={biweeklyAnchorDate(schedule)}
-						onchange={(event) => updateAnchorDate(schedule, event.currentTarget.value)}
+						onChange={(date) => updateAnchorDate(schedule, date)}
 					/>
 					<span class="text-xs text-surface-400">Only the selected reset weekday is valid.</span>
-				</label>
+				</div>
 			{/if}
 		</div>
 	{/if}
