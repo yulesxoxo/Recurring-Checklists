@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { page } from '$app/state';
 	import { Progress } from '@skeletonlabs/skeleton-svelte';
 	import ChecklistNotFound from '../ChecklistNotFound.svelte';
 	import ChecklistView from '../ChecklistView.svelte';
@@ -17,12 +16,13 @@
 	let appState = $state<AppState>(createEmptyAppState());
 	let mounted = $state(false);
 	let now = $state(new Date());
-	let link = $derived(page.url.searchParams.get(DIRECT_LINK_PARAM));
+	let link = $state<string | null>(null);
 	let checklist = $derived(findChecklist(link, appState.checklists));
 	let pageTitle = $derived(checklist?.name ?? 'Checklist not found');
 	let pageDescription = $derived(checklist?.description || 'No description');
 
 	onMount(() => {
+		link = new URLSearchParams(window.location.search).get(DIRECT_LINK_PARAM);
 		appState = loadAppState(localStorage);
 		mounted = true;
 

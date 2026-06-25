@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
 	import { ArrowDown, ArrowUp, ChevronDown, Plus, Save, Trash2 } from '@lucide/svelte';
 	import { Accordion } from '@skeletonlabs/skeleton-svelte';
 	import { onMount } from 'svelte';
@@ -53,9 +52,10 @@
 	let checklistNotFound = $state(false);
 	let now = $state(new Date());
 	let scheduleTimeModes = $state<Record<string, ScheduleTimeMode>>({});
-	let editChecklistId = $derived(page.url.searchParams.get('edit'));
+	let editChecklistId = $state<string | null>(null);
 
 	onMount(() => {
+		editChecklistId = new URLSearchParams(window.location.search).get('edit');
 		if (editChecklistId) loadChecklistForEditing(editChecklistId);
 
 		let timer: number | undefined;

@@ -63,7 +63,7 @@
 		url.searchParams.set(DIRECT_LINK_PARAM, checklist.linkKey || checklist.id);
 
 		const search = url.searchParams.toString();
-		return `${url.origin}?${search}`;
+		return `${url.origin}${url.pathname}?${search}`;
 	}
 
 	async function copyChecklistLink(checklist: Checklist): Promise<void> {

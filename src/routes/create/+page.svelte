@@ -1,10 +1,14 @@
 <script lang="ts">
-	import { page } from '$app/state';
+	import { onMount } from 'svelte';
 	import PageHeader from '../PageHeader.svelte';
 	import ChecklistEditor from './ChecklistEditor.svelte';
 
-	let editChecklistId = $derived(page.url.searchParams.get('edit'));
+	let editChecklistId = $state<string | null>(null);
 	let pageTitle = $derived(editChecklistId ? 'Edit Checklist' : 'Create Checklist');
+
+	onMount(() => {
+		editChecklistId = new URLSearchParams(window.location.search).get('edit');
+	});
 </script>
 
 <svelte:head>
