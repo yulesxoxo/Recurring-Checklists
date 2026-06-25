@@ -12,10 +12,11 @@
 	import {
 		describeSchedule,
 		formatLocalReset,
-		formatUtcReset,
 		getNextReset,
 		getResetWindowStart,
-		intervalCompletionExpiresAt
+		intervalCompletionExpiresAt,
+		scheduleResetTimeUtc,
+		utcTimeToLocalTime
 	} from '$lib/date-time';
 
 	let {
@@ -97,6 +98,42 @@
 	): RecurringSchedule {
 		return task.schedule ?? section.defaultSchedule;
 	}
+
+	function completionDate(record: CompletionRecord | undefined): Date | null {
+		if (!record) return null;
+
+		const completedAt = new Date(record.completedAt);
+		return Number.isNaN(completedAt.getTime()) ? null : completedAt;
+	}
+
+	function completionIntervalClearTime(
+		schedule: RecurringSchedule,
+		record: CompletionRecord | undefined
+	): Date | null {
+		const completedAt = completionDate(record);
+		return completedAt ? intervalCompletionExpiresAt(schedule, completedAt) : null;
+	}
+
+	function describeViewSchedule(schedule: RecurringSchedule, reference: Date): string {
+		if (schedule.frequency === 'interval') return describeSchedule(schedule);
+
+		const utcTime = scheduleResetTimeUtc(schedule);
+		const localTime = utcTimeToLocalTime(utcTime, reference);
+		const resetTime = `${localTime} local / ${utcTime} UTC`;
+
+		switch (schedule.frequency) {
+			case 'daily':
+				return `Resets daily at ${resetTime}`;
+			case 'weekly':
+				return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
+			case 'biweekly':
+				return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
+		}
+	}
+
+	function titleCase(value: string): string {
+		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+	}
 </script>
 
 <section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
@@ -125,6 +162,14 @@
 				>
 					<div class="min-w-0">
 						<h2 class="text-xl font-semibold text-surface-50">{section.name}</h2>
+						<p class="mt-1 text-sm text-surface-400">
+							{describeViewSchedule(section.defaultSchedule, now)}
+						</p>
+						{#if !(section.defaultSchedule.frequency === 'interval' && section.defaultSchedule.intervalMode === 'completion')}
+							<p class="mt-1 text-xs text-surface-400">
+								Next reset: {formatLocalReset(getNextReset(section.defaultSchedule, now))}
+							</p>
+						{/if}
 					</div>
 					<div class="flex flex-wrap items-center gap-2">
 						<span class="badge preset-tonal-success">
@@ -144,6 +189,8 @@
 					{:else}
 						{#each section.tasks as task (task.id)}
 							{@const schedule = effectiveTaskSchedule(section, task)}
+							{@const completion = getCompletion(checklist.id, section.id, task.id)}
+							{@const clearTime = completionIntervalClearTime(schedule, completion)}
 							<label
 								class="flex cursor-pointer gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
 							>
@@ -158,16 +205,20 @@
 									{#if task.notes}
 										<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
 									{/if}
-									<span class="mt-2 block text-xs text-surface-400">
-										{describeSchedule(schedule)}
-										{task.schedule ? '' : ' (section default)'}
-									</span>
-									{#if !(schedule.frequency === 'interval' && schedule.intervalMode === 'completion')}
-										<span class="mt-1 block text-xs text-surface-400">
-											Next reset local: {formatLocalReset(getNextReset(schedule, now))}
+									{#if task.schedule}
+										<span class="mt-2 block text-xs text-surface-400">
+											Custom schedule: {describeViewSchedule(schedule, now)}
 										</span>
+									{/if}
+									{#if schedule.frequency === 'interval' && schedule.intervalMode === 'completion'}
+										{#if clearTime}
+											<span class="mt-1 block text-xs text-surface-400">
+												Resets: {formatLocalReset(clearTime)}
+											</span>
+										{/if}
+									{:else if task.schedule}
 										<span class="mt-1 block text-xs text-surface-400">
-											Next reset UTC: {formatUtcReset(getNextReset(schedule, now))}
+											Next reset: {formatLocalReset(getNextReset(schedule, now))}
 										</span>
 									{/if}
 								</span>
