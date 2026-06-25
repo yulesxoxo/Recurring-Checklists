@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { Progress } from '@skeletonlabs/skeleton-svelte';
 	import ChecklistNotFound from '../ChecklistNotFound.svelte';
-	import ChecklistView from '../ChecklistView.svelte';
+	import ChecklistView from './ChecklistView.svelte';
 	import PageHeader from '../PageHeader.svelte';
 	import {
 		DIRECT_LINK_PARAM,
