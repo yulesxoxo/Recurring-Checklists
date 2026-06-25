@@ -79,9 +79,7 @@
 		input.value = '';
 		if (!file) return;
 
-		const result = importPortableChecklists(await file.text(), {
-			allowDevFrequencies: import.meta.env.DEV
-		});
+		const result = importPortableChecklists(await file.text());
 
 		if (!result.ok) {
 			importFeedback = result.error;
@@ -172,17 +170,16 @@
 			schedule: normalizeSchedule(
 				{
 					frequency,
-					resetTimeUtc: '05:00',
 					resetWeekday,
-					anchorDate:
+					anchorDateTimeUtc:
 						frequency === 'biweekly'
-							? alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')
-							: undefined
+							? `${alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')}T05:00:00.000Z`
+							: `${todayUtc()}T05:00:00.000Z`
 				},
-				{ allowDevFrequencies: import.meta.env.DEV }
+				{}
 			) ?? {
 				frequency: 'daily',
-				resetTimeUtc: '05:00'
+				anchorDateTimeUtc: `${todayUtc()}T05:00:00.000Z`
 			},
 			tasks: [createTask('New task')]
 		};

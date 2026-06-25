@@ -1,6 +1,6 @@
-export type BaseFrequency = 'daily' | 'weekly' | 'biweekly';
-export type DevFrequency = 'hourly' | 'minutely';
-export type Frequency = BaseFrequency | DevFrequency;
+export type BaseFrequency = 'daily' | 'weekly' | 'biweekly' | 'interval';
+export type Frequency = BaseFrequency;
+export type IntervalMode = 'anchor' | 'completion';
 export type Weekday =
 	| 'sunday'
 	| 'monday'
@@ -12,9 +12,10 @@ export type Weekday =
 
 export type RecurringSchedule = {
 	frequency: Frequency;
-	resetTimeUtc: string;
 	resetWeekday?: Weekday;
-	anchorDate?: string;
+	anchorDateTimeUtc?: string;
+	intervalMinutes?: number;
+	intervalMode?: IntervalMode;
 };
 
 export type ChecklistTask = {
@@ -67,9 +68,7 @@ export type PortableChecklistExport = {
 	};
 };
 
-export type ChecklistParseOptions = {
-	allowDevFrequencies?: boolean;
-};
+export type ChecklistParseOptions = object;
 
 export type ImportPortableChecklistsOptions = ChecklistParseOptions & {
 	idFactory?: () => string;

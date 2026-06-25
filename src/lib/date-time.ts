@@ -3,8 +3,8 @@ import type { RecurringSchedule, Weekday } from './checklists/types';
 export type ScheduleTimeMode = 'local' | 'utc';
 
 const dayMs = 24 * 60 * 60 * 1000;
-const hourMs = 60 * 60 * 1000;
 const minuteMs = 60 * 1000;
+const defaultIntervalMinutes = 60;
 const weekdayIndex: Record<Weekday, number> = {
 	sunday: 0,
 	monday: 1,
@@ -30,23 +30,11 @@ export function alignDateToWeekday(dateValue: string, weekday: Weekday): string 
 }
 
 export function getResetWindowStart(schedule: RecurringSchedule, now = new Date()): Date | null {
-	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
+	const { hours, minutes } = parseResetTime(scheduleResetTimeUtc(schedule));
 
-	if (schedule.frequency === 'minutely') {
-		return new Date(Math.floor(now.getTime() / minuteMs) * minuteMs);
-	}
-
-	if (schedule.frequency === 'hourly') {
-		const candidate = new Date(
-			Date.UTC(
-				now.getUTCFullYear(),
-				now.getUTCMonth(),
-				now.getUTCDate(),
-				now.getUTCHours(),
-				minutes
-			)
-		);
-		return candidate > now ? new Date(candidate.getTime() - hourMs) : candidate;
+	if (schedule.frequency === 'interval') {
+		if ((schedule.intervalMode ?? 'anchor') === 'completion') return null;
+		return getIntervalWindowStart(schedule, now);
 	}
 
 	if (schedule.frequency === 'daily') {
@@ -68,27 +56,23 @@ export function getNextReset(schedule: RecurringSchedule, now = new Date()): Dat
 	if (!windowStart) return null;
 
 	switch (schedule.frequency) {
-		case 'minutely':
-			return new Date(windowStart.getTime() + minuteMs);
-		case 'hourly':
-			return new Date(windowStart.getTime() + hourMs);
 		case 'daily':
 			return addDays(windowStart, 1);
 		case 'weekly':
 			return addDays(windowStart, 7);
 		case 'biweekly':
 			return addDays(windowStart, 14);
+		case 'interval':
+			return new Date(windowStart.getTime() + intervalMinutes(schedule) * minuteMs);
 	}
 }
 
 export function describeSchedule(schedule: RecurringSchedule): string {
-	const time = normalizeResetTime(schedule.resetTimeUtc);
+	const time = scheduleResetTimeUtc(schedule);
 
 	switch (schedule.frequency) {
-		case 'minutely':
-			return 'Resets every minute';
-		case 'hourly':
-			return `Resets hourly at minute ${time.slice(3)} UTC`;
+		case 'interval':
+			return describeIntervalSchedule(schedule);
 		case 'daily':
 			return `Resets daily at ${time} UTC`;
 		case 'weekly':
@@ -96,6 +80,17 @@ export function describeSchedule(schedule: RecurringSchedule): string {
 		case 'biweekly':
 			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
 	}
+}
+
+export function intervalCompletionExpiresAt(
+	schedule: RecurringSchedule,
+	completedAt: Date
+): Date | null {
+	if (schedule.frequency !== 'interval' || (schedule.intervalMode ?? 'anchor') !== 'completion') {
+		return null;
+	}
+
+	return new Date(completedAt.getTime() + intervalMinutes(schedule) * minuteMs);
 }
 
 export function formatUtcReset(date: Date | null): string {
@@ -106,7 +101,10 @@ export function formatLocalReset(date: Date | null): string {
 	return formatResetDate(date);
 }
 
-export function formatResetDate(date: Date | null, timeZone: string | undefined = undefined): string {
+export function formatResetDate(
+	date: Date | null,
+	timeZone: string | undefined = undefined
+): string {
 	if (!date) return 'Not scheduled';
 
 	const formatter = new Intl.DateTimeFormat('en-US', {
@@ -129,8 +127,17 @@ export function scheduleInputTime(
 	timeMode: ScheduleTimeMode = 'utc'
 ): string {
 	return timeMode === 'local'
-		? utcTimeToLocalTime(schedule.resetTimeUtc, reference)
-		: normalizeResetTime(schedule.resetTimeUtc);
+		? utcTimeToLocalTime(scheduleResetTimeUtc(schedule), reference)
+		: scheduleResetTimeUtc(schedule);
+}
+
+export function scheduleResetTimeUtc(schedule: RecurringSchedule): string {
+	const dateTime = schedule.anchorDateTimeUtc
+		? parseUtcDateTimeInput(schedule.anchorDateTimeUtc)
+		: null;
+	if (!dateTime) return '05:00';
+
+	return formatTimeParts(dateTime.getUTCHours(), dateTime.getUTCMinutes());
 }
 
 export function utcTimeToLocalTime(time: string, reference = new Date()): string {
@@ -211,8 +218,56 @@ export function parseUtcDateInput(dateValue: string): Date | null {
 	return date;
 }
 
+export function normalizeUtcDateTimeInput(dateTimeValue: string): string | null {
+	const date = parseUtcDateTimeInput(dateTimeValue);
+	return date?.toISOString() ?? null;
+}
+
+export function utcDateTimeToInputValue(dateTimeValue: string | undefined): string {
+	const date = dateTimeValue ? parseUtcDateTimeInput(dateTimeValue) : null;
+	return (date ?? new Date()).toISOString().slice(0, 16);
+}
+
+export function parseUtcDateTimeInput(dateTimeValue: string): Date | null {
+	const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d{3})?)?(?:Z)?$/.exec(
+		dateTimeValue
+	);
+	if (!match) return null;
+
+	const year = Number(match[1]);
+	const month = Number(match[2]) - 1;
+	const day = Number(match[3]);
+	const hours = Number(match[4]);
+	const minutes = Number(match[5]);
+	const seconds = match[6] ? Number(match[6]) : 0;
+
+	if (hours > 23 || minutes > 59 || seconds > 59) return null;
+
+	const date = new Date(Date.UTC(year, month, day, hours, minutes, seconds, 0));
+	if (
+		date.getUTCFullYear() !== year ||
+		date.getUTCMonth() !== month ||
+		date.getUTCDate() !== day ||
+		date.getUTCHours() !== hours ||
+		date.getUTCMinutes() !== minutes ||
+		date.getUTCSeconds() !== seconds
+	) {
+		return null;
+	}
+
+	return date;
+}
+
+export function normalizeIntervalMinutes(value: unknown): number {
+	const numeric =
+		typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+	if (!Number.isFinite(numeric)) return defaultIntervalMinutes;
+
+	return Math.max(1, Math.floor(numeric));
+}
+
 function getWeeklyWindowStart(schedule: RecurringSchedule, now: Date, intervalDays: 7): Date {
-	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
+	const { hours, minutes } = parseResetTime(scheduleResetTimeUtc(schedule));
 	const resetWeekday = weekdayIndex[schedule.resetWeekday ?? 'monday'];
 	const currentWeekday = now.getUTCDay();
 	const daysSinceResetWeekday = (currentWeekday - resetWeekday + 7) % 7;
@@ -225,10 +280,9 @@ function getWeeklyWindowStart(schedule: RecurringSchedule, now: Date, intervalDa
 }
 
 function getBiweeklyWindowStart(schedule: RecurringSchedule, now: Date): Date | null {
-	if (!schedule.anchorDate) return null;
+	if (!schedule.anchorDateTimeUtc) return null;
 
-	const { hours, minutes } = parseResetTime(schedule.resetTimeUtc);
-	const anchor = parseAnchorDate(schedule.anchorDate, hours, minutes);
+	const anchor = parseUtcDateTimeInput(schedule.anchorDateTimeUtc);
 	if (!anchor) return null;
 
 	const resetWeekday = weekdayIndex[schedule.resetWeekday ?? 'monday'];
@@ -241,12 +295,38 @@ function getBiweeklyWindowStart(schedule: RecurringSchedule, now: Date): Date | 
 	return candidate;
 }
 
-function parseAnchorDate(anchorDate: string, hours: number, minutes: number): Date | null {
-	const date = parseUtcDateInput(anchorDate);
-	if (!date) return null;
+function getIntervalWindowStart(schedule: RecurringSchedule, now: Date): Date | null {
+	if (!schedule.anchorDateTimeUtc) return null;
 
-	date.setUTCHours(hours, minutes, 0, 0);
-	return date;
+	const anchor = parseUtcDateTimeInput(schedule.anchorDateTimeUtc);
+	if (!anchor) return null;
+
+	const intervalMs = intervalMinutes(schedule) * minuteMs;
+	const cyclesSinceAnchor = Math.floor((now.getTime() - anchor.getTime()) / intervalMs);
+	let candidate = new Date(anchor.getTime() + cyclesSinceAnchor * intervalMs);
+	if (candidate > now) candidate = new Date(candidate.getTime() - intervalMs);
+
+	return candidate;
+}
+
+function intervalMinutes(schedule: RecurringSchedule): number {
+	return normalizeIntervalMinutes(schedule.intervalMinutes);
+}
+
+function describeIntervalSchedule(schedule: RecurringSchedule): string {
+	const totalMinutes = intervalMinutes(schedule);
+	const hours = Math.floor(totalMinutes / 60);
+	const minutes = totalMinutes % 60;
+	const duration =
+		hours > 0 && minutes > 0
+			? `${hours} hr ${minutes} min`
+			: hours > 0
+				? `${hours} hr`
+				: `${minutes} min`;
+
+	return (schedule.intervalMode ?? 'anchor') === 'completion'
+		? `Resets ${duration} after completion`
+		: `Resets every ${duration} from anchor`;
 }
 
 function addDays(date: Date, days: number): Date {

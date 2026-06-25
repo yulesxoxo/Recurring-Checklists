@@ -14,7 +14,8 @@
 		formatLocalReset,
 		formatUtcReset,
 		getNextReset,
-		getResetWindowStart
+		getResetWindowStart,
+		intervalCompletionExpiresAt
 	} from '$lib/date-time';
 
 	let {
@@ -67,11 +68,19 @@
 		if (!record) return false;
 
 		const completedAt = new Date(record.completedAt);
+		if (Number.isNaN(completedAt.getTime())) return false;
+
+		if (
+			section.schedule.frequency === 'interval' &&
+			section.schedule.intervalMode === 'completion'
+		) {
+			const expiresAt = intervalCompletionExpiresAt(section.schedule, completedAt);
+			return expiresAt !== null && expiresAt > reference;
+		}
+
 		const windowStart = getResetWindowStart(section.schedule, reference);
 
-		return (
-			!Number.isNaN(completedAt.getTime()) && windowStart !== null && completedAt >= windowStart
-		);
+		return windowStart !== null && completedAt >= windowStart;
 	}
 
 	function sectionProgress(section: ChecklistSection): { done: number; total: number } {
@@ -109,7 +118,7 @@
 					<div class="min-w-0">
 						<h2 class="text-xl font-semibold text-surface-50">{section.name}</h2>
 						<p class="mt-1 text-sm text-surface-400">{describeSchedule(section.schedule)}</p>
-						{#if section.schedule.frequency !== 'minutely'}
+						{#if !(section.schedule.frequency === 'interval' && section.schedule.intervalMode === 'completion')}
 							<p class="mt-1 text-sm text-surface-400">
 								Next reset local: {formatLocalReset(getNextReset(section.schedule, now))}
 							</p>

@@ -25,7 +25,7 @@
 	);
 
 	onMount(() => {
-		appState = loadAppState(localStorage, { allowDevFrequencies: import.meta.env.DEV });
+		appState = loadAppState(localStorage);
 		mounted = true;
 		persist();
 		enterChecklistFromUrl(true);

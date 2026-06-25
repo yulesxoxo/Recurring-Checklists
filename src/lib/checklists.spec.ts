@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { AppState, RecurringSchedule } from './checklists';
-import { getResetWindowStart, localTimeToUtcTime, scheduleInputTimeToUtc } from './date-time';
+import {
+	getNextReset,
+	getResetWindowStart,
+	intervalCompletionExpiresAt,
+	localTimeToUtcTime,
+	scheduleInputTimeToUtc
+} from './date-time';
 import {
 	STORAGE_KEY,
 	createEmptyAppState,
@@ -60,7 +66,7 @@ describe('checklist storage', () => {
 						{
 							id: 'section-1',
 							name: 'Daily',
-							schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
+							schedule: { frequency: 'daily', anchorDateTimeUtc: '2026-06-24T05:00:00.000Z' },
 							tasks: [{ id: 'task-1', title: 'Review queue', notes: 'Escalate blockers' }]
 						}
 					]
@@ -88,7 +94,7 @@ describe('checklist storage', () => {
 		expect(loadAppState(storage)).toEqual(createEmptyAppState());
 	});
 
-	it('drops dev-only schedules in production mode without losing valid sections', () => {
+	it('drops unsupported legacy schedules without losing valid sections', () => {
 		const storage = new MemoryStorage();
 		storage.setItem(
 			STORAGE_KEY,
@@ -122,42 +128,14 @@ describe('checklist storage', () => {
 		expect(loadAppState(storage).checklists[0].sections).toHaveLength(1);
 		expect(loadAppState(storage).checklists[0].sections[0].schedule.frequency).toBe('daily');
 	});
-
-	it('keeps dev-only schedules in development mode', () => {
-		const storage = new MemoryStorage();
-		storage.setItem(
-			STORAGE_KEY,
-			JSON.stringify({
-				version: 1,
-				checklists: [
-					{
-						id: 'checklist-1',
-						name: 'Operations',
-						description: '',
-						sections: [
-							{
-								id: 'section-1',
-								name: 'Hourly',
-								schedule: { frequency: 'hourly', resetTimeUtc: '00:15' },
-								tasks: []
-							}
-						]
-					}
-				],
-				completions: {}
-			})
-		);
-
-		expect(
-			loadAppState(storage, { allowDevFrequencies: true }).checklists[0].sections[0].schedule
-				.frequency
-		).toBe('hourly');
-	});
 });
 
 describe('reset windows', () => {
 	it('uses the current daily window after the reset boundary', () => {
-		const schedule: RecurringSchedule = { frequency: 'daily', resetTimeUtc: '05:00' };
+		const schedule: RecurringSchedule = {
+			frequency: 'daily',
+			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T05:00:00.000Z'))?.toISOString()).toBe(
 			'2026-06-24T05:00:00.000Z'
@@ -170,8 +148,8 @@ describe('reset windows', () => {
 	it('uses Monday at 05:00 UTC as the weekly boundary', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'weekly',
-			resetTimeUtc: '05:00',
-			resetWeekday: 'monday'
+			resetWeekday: 'monday',
+			anchorDateTimeUtc: '2026-06-22T05:00:00.000Z'
 		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:00:00.000Z'))?.toISOString()).toBe(
@@ -185,9 +163,8 @@ describe('reset windows', () => {
 	it('uses the anchor date for deterministic biweekly boundaries', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'biweekly',
-			resetTimeUtc: '05:00',
 			resetWeekday: 'monday',
-			anchorDate: '2026-06-08'
+			anchorDateTimeUtc: '2026-06-08T05:00:00.000Z'
 		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:00:00.000Z'))?.toISOString()).toBe(
@@ -201,42 +178,40 @@ describe('reset windows', () => {
 	it('requires the biweekly anchor date to match the selected reset weekday', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'biweekly',
-			resetTimeUtc: '05:00',
 			resetWeekday: 'tuesday',
-			anchorDate: '2026-06-08'
+			anchorDateTimeUtc: '2026-06-08T05:00:00.000Z'
 		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:00:00.000Z'))).toBeNull();
 	});
 
-	it('uses the selected minute as the hourly boundary', () => {
-		const schedule: RecurringSchedule = { frequency: 'hourly', resetTimeUtc: '00:15' };
+	it('uses fixed interval windows from an anchor date time', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'interval',
+			intervalMinutes: 150,
+			intervalMode: 'anchor',
+			anchorDateTimeUtc: '2026-06-24T08:00:00.000Z'
+		};
 
-		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:15:00.000Z'))?.toISOString()).toBe(
-			'2026-06-24T12:15:00.000Z'
+		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:59:00.000Z'))?.toISOString()).toBe(
+			'2026-06-24T10:30:00.000Z'
 		);
-		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:14:59.000Z'))?.toISOString()).toBe(
-			'2026-06-24T11:15:00.000Z'
-		);
-	});
-
-	it('uses the current minute as the minutely boundary', () => {
-		const schedule: RecurringSchedule = { frequency: 'minutely', resetTimeUtc: '00:00' };
-
-		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:15:30.000Z'))?.toISOString()).toBe(
-			'2026-06-24T12:15:00.000Z'
+		expect(getNextReset(schedule, new Date('2026-06-24T12:59:00.000Z'))?.toISOString()).toBe(
+			'2026-06-24T13:00:00.000Z'
 		);
 	});
 
-	it('ignores reset time for minutely boundaries', () => {
-		const now = new Date('2026-06-24T12:15:30.000Z');
+	it('expires completion-based intervals from the completed time', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'interval',
+			intervalMinutes: 90,
+			intervalMode: 'completion'
+		};
 
 		expect(
-			getResetWindowStart({ frequency: 'minutely', resetTimeUtc: '00:00' }, now)?.toISOString()
-		).toBe('2026-06-24T12:15:00.000Z');
-		expect(
-			getResetWindowStart({ frequency: 'minutely', resetTimeUtc: '23:59' }, now)?.toISOString()
-		).toBe('2026-06-24T12:15:00.000Z');
+			intervalCompletionExpiresAt(schedule, new Date('2026-06-24T10:00:00.000Z'))?.toISOString()
+		).toBe('2026-06-24T11:30:00.000Z');
+		expect(getResetWindowStart(schedule, new Date('2026-06-24T10:00:00.000Z'))).toBeNull();
 	});
 });
 
@@ -269,23 +244,38 @@ describe('reorder helpers', () => {
 });
 
 describe('schedule normalization', () => {
-	it('removes weekly metadata when switching an editable schedule to minutely', () => {
-		const schedule = normalizeSchedule(
-			{
-				frequency: 'minutely',
-				resetTimeUtc: '09:30',
-				timeMode: 'local',
-				resetWeekday: 'monday',
-				anchorDate: '2026-06-22'
-			},
-			{ allowDevFrequencies: true }
-		);
+	it('converts legacy biweekly anchor dates to anchor date times', () => {
+		const schedule = normalizeSchedule({
+			frequency: 'biweekly',
+			resetTimeUtc: '09:30',
+			resetWeekday: 'monday',
+			anchorDate: '2026-06-22'
+		});
 
 		expect(schedule).toEqual({
-			frequency: 'minutely',
+			frequency: 'biweekly',
+			resetWeekday: 'monday',
+			anchorDateTimeUtc: '2026-06-22T09:30:00.000Z',
+			intervalMinutes: undefined,
+			intervalMode: undefined
+		});
+	});
+
+	it('stores interval duration as total minutes', () => {
+		const schedule = normalizeSchedule({
+			frequency: 'interval',
 			resetTimeUtc: '09:30',
+			intervalMinutes: 135,
+			intervalMode: 'completion',
+			anchorDateTimeUtc: '2026-06-24T08:00'
+		});
+
+		expect(schedule).toEqual({
+			frequency: 'interval',
 			resetWeekday: undefined,
-			anchorDate: undefined
+			anchorDateTimeUtc: undefined,
+			intervalMinutes: 135,
+			intervalMode: 'completion'
 		});
 	});
 });
@@ -321,7 +311,7 @@ describe('portable exports', () => {
 						{
 							id: 'section-1',
 							name: 'Daily',
-							schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
+							schedule: { frequency: 'daily', anchorDateTimeUtc: '2026-06-24T05:00:00.000Z' },
 							tasks: [{ id: 'task-1', title: 'Review queue', notes: 'Escalate blockers' }]
 						}
 					]
@@ -350,7 +340,10 @@ describe('portable exports', () => {
 				sections: [
 					{
 						name: 'Daily',
-						schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
+						schedule: {
+							frequency: 'daily',
+							anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+						},
 						tasks: [{ title: 'Review queue', notes: 'Escalate blockers' }]
 					}
 				]

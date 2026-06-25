@@ -1,8 +1,12 @@
 import {
 	alignDateToWeekday,
 	isValidResetTime,
+	normalizeIntervalMinutes,
 	normalizeResetTime,
+	normalizeUtcDateTimeInput,
 	parseUtcDateInput,
+	parseUtcDateTimeInput,
+	parseResetTime,
 	todayUtc
 } from '../date-time';
 import { createId } from '../id';
@@ -26,26 +30,28 @@ export function normalizeSchedule(
 	if (!isRecord(value) || !isFrequency(value.frequency, options)) return null;
 
 	const frequency = value.frequency;
-	const resetTimeUtc =
-		typeof value.resetTimeUtc === 'string' ? normalizeResetTime(value.resetTimeUtc) : '05:00';
+	const resetTimeUtc = legacyResetTime(value);
 	const resetWeekday =
 		frequency === 'weekly' || frequency === 'biweekly'
 			? isWeekday(value.resetWeekday)
 				? value.resetWeekday
 				: 'monday'
 			: undefined;
+	const intervalMode = value.intervalMode === 'completion' ? 'completion' : 'anchor';
 
 	return {
 		frequency,
-		resetTimeUtc,
 		resetWeekday,
-		anchorDate:
-			frequency === 'biweekly'
-				? alignDateToWeekday(
-						typeof value.anchorDate === 'string' ? value.anchorDate : todayUtc(),
-						resetWeekday ?? 'monday'
-					)
-				: undefined
+		anchorDateTimeUtc: normalizeScheduleAnchorDateTime(
+			value,
+			frequency,
+			resetTimeUtc,
+			resetWeekday,
+			intervalMode
+		),
+		intervalMinutes:
+			frequency === 'interval' ? normalizeIntervalMinutes(value.intervalMinutes) : undefined,
+		intervalMode: frequency === 'interval' ? intervalMode : undefined
 	};
 }
 
@@ -191,26 +197,63 @@ function normalizePortableSchedule(
 	options: ChecklistParseOptions
 ): RecurringSchedule | null {
 	if (!isRecord(value) || !isFrequency(value.frequency, options)) return null;
-	if (typeof value.resetTimeUtc !== 'string' || !isValidResetTime(value.resetTimeUtc)) return null;
+	const hasValidAnchorDateTime =
+		typeof value.anchorDateTimeUtc === 'string' && parseUtcDateTimeInput(value.anchorDateTimeUtc);
+	const hasValidLegacyResetTime =
+		typeof value.resetTimeUtc === 'string' && isValidResetTime(value.resetTimeUtc);
 
 	if (value.frequency === 'weekly' || value.frequency === 'biweekly') {
 		if (value.resetWeekday !== undefined && !isWeekday(value.resetWeekday)) return null;
 	}
 
+	if (value.resetTimeUtc !== undefined && !hasValidLegacyResetTime) return null;
+
+	if (
+		!(value.frequency === 'interval' && value.intervalMode === 'completion') &&
+		!hasValidAnchorDateTime &&
+		!hasValidLegacyResetTime
+	) {
+		return null;
+	}
+
 	if (value.frequency === 'biweekly') {
-		if (typeof value.anchorDate !== 'string' || !parseUtcDateInput(value.anchorDate)) return null;
+		if (typeof value.anchorDateTimeUtc === 'string' && !hasValidAnchorDateTime) return null;
+
+		if (
+			value.anchorDateTimeUtc === undefined &&
+			(typeof value.anchorDate !== 'string' || !parseUtcDateInput(value.anchorDate))
+		) {
+			return null;
+		}
+	}
+
+	if (value.frequency === 'interval') {
+		if (
+			typeof value.intervalMinutes !== 'number' ||
+			!Number.isFinite(value.intervalMinutes) ||
+			value.intervalMinutes < 1
+		) {
+			return null;
+		}
+
+		if (
+			value.intervalMode !== undefined &&
+			value.intervalMode !== 'anchor' &&
+			value.intervalMode !== 'completion'
+		) {
+			return null;
+		}
+
+		if ((value.intervalMode ?? 'anchor') === 'anchor' && !hasValidAnchorDateTime) {
+			return null;
+		}
 	}
 
 	return normalizeSchedule(value, options);
 }
 
 function isFrequency(value: unknown, options: ChecklistParseOptions): value is Frequency {
-	return (
-		value === 'daily' ||
-		value === 'weekly' ||
-		value === 'biweekly' ||
-		(options.allowDevFrequencies === true && (value === 'hourly' || value === 'minutely'))
-	);
+	return value === 'daily' || value === 'weekly' || value === 'biweekly' || value === 'interval';
 }
 
 function isWeekday(value: unknown): value is Weekday {
@@ -223,6 +266,65 @@ function isWeekday(value: unknown): value is Weekday {
 		value === 'friday' ||
 		value === 'saturday'
 	);
+}
+
+function normalizeBiweeklyAnchorDateTime(
+	value: Record<string, unknown>,
+	resetTimeUtc: string,
+	resetWeekday: Weekday
+): string {
+	const rawDateTime =
+		typeof value.anchorDateTimeUtc === 'string'
+			? parseUtcDateTimeInput(value.anchorDateTimeUtc)
+			: null;
+	const rawDate =
+		rawDateTime?.toISOString().slice(0, 10) ??
+		(typeof value.anchorDate === 'string' ? value.anchorDate : todayUtc());
+	const alignedDate = alignDateToWeekday(rawDate, resetWeekday);
+	const { hours, minutes } = parseResetTime(resetTimeUtc);
+
+	return `${alignedDate}T${hours.toString().padStart(2, '0')}:${minutes
+		.toString()
+		.padStart(2, '0')}:00.000Z`;
+}
+
+function normalizeScheduleAnchorDateTime(
+	value: Record<string, unknown>,
+	frequency: Frequency,
+	resetTimeUtc: string,
+	resetWeekday: Weekday | undefined,
+	intervalMode: 'anchor' | 'completion'
+): string | undefined {
+	if (frequency === 'interval' && intervalMode === 'completion') {
+		return undefined;
+	}
+
+	if (frequency === 'biweekly') {
+		return normalizeBiweeklyAnchorDateTime(value, resetTimeUtc, resetWeekday ?? 'monday');
+	}
+
+	const fallback = `${todayUtc()}T${resetTimeUtc}:00.000Z`;
+	return (
+		normalizeUtcDateTimeInput(
+			typeof value.anchorDateTimeUtc === 'string' ? value.anchorDateTimeUtc : fallback
+		) ?? fallback
+	);
+}
+
+function legacyResetTime(value: Record<string, unknown>): string {
+	if (typeof value.resetTimeUtc === 'string') return normalizeResetTime(value.resetTimeUtc);
+
+	if (typeof value.anchorDateTimeUtc === 'string') {
+		const parsed = parseUtcDateTimeInput(value.anchorDateTimeUtc);
+		if (parsed) {
+			return `${parsed.getUTCHours().toString().padStart(2, '0')}:${parsed
+				.getUTCMinutes()
+				.toString()
+				.padStart(2, '0')}`;
+		}
+	}
+
+	return '05:00';
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
