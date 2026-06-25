@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { CheckCircle2 } from '@lucide/svelte';
+	import { CheckCircle2, Plus } from '@lucide/svelte';
 	import {
 		type AppState,
 		type Checklist,
@@ -31,13 +31,21 @@
 		onPersist: () => void;
 	} = $props();
 
+	type BankedTaskStatus = {
+		available: number;
+		capacity: number;
+		lastAccruedAt?: string;
+	};
+
 	function toggleTask(section: ChecklistSection, task: ChecklistTask, checked: boolean): void {
 		appState.completions[checklist.id] ??= {};
 		appState.completions[checklist.id][section.id] ??= {};
 
 		if (checked) {
+			const completedAt = new Date().toISOString();
 			appState.completions[checklist.id][section.id][task.id] = {
-				completedAt: new Date().toISOString()
+				completedAt,
+				completionLog: [completedAt]
 			};
 		} else {
 			delete appState.completions[checklist.id][section.id][task.id];
@@ -48,11 +56,46 @@
 	}
 
 	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
-		return isTaskComplete(
-			effectiveTaskSchedule(section, task),
-			getCompletion(checklist.id, section.id, task.id),
-			now
+		const record = getCompletion(checklist.id, section.id, task.id);
+		if (taskHasCarryover(task)) return bankedTaskStatus(section, task, record).available <= 0;
+
+		return (
+			taskCompletionCount(effectiveTaskSchedule(section, task), record, now) >=
+			taskRepeatCount(task)
 		);
+	}
+
+	function completeTaskUnit(section: ChecklistSection, task: ChecklistTask): void {
+		appState.completions[checklist.id] ??= {};
+		appState.completions[checklist.id][section.id] ??= {};
+
+		const record = getCompletion(checklist.id, section.id, task.id) ?? {};
+		const completedAt = new Date().toISOString();
+
+		if (taskHasCarryover(task)) {
+			const status = bankedTaskStatus(section, task, record);
+			if (status.available <= 0) return;
+
+			appState.completions[checklist.id][section.id][task.id] = {
+				...record,
+				completedAt,
+				completionLog: appendCompletion(record, completedAt),
+				availableCount: status.available - 1,
+				lastAccruedAt: status.lastAccruedAt
+			};
+		} else {
+			const schedule = effectiveTaskSchedule(section, task);
+			const completionCount = taskCompletionCount(schedule, record, now);
+			if (completionCount >= taskRepeatCount(task)) return;
+
+			appState.completions[checklist.id][section.id][task.id] = {
+				completedAt,
+				completionLog: appendCompletion(record, completedAt)
+			};
+		}
+
+		now = new Date();
+		onPersist();
 	}
 
 	function getCompletion(
@@ -61,26 +104,6 @@
 		taskId: string
 	): CompletionRecord | undefined {
 		return appState.completions[checklistId]?.[sectionId]?.[taskId];
-	}
-
-	function isTaskComplete(
-		schedule: RecurringSchedule,
-		record: CompletionRecord | undefined,
-		reference: Date
-	): boolean {
-		if (!record) return false;
-
-		const completedAt = new Date(record.completedAt);
-		if (Number.isNaN(completedAt.getTime())) return false;
-
-		if (schedule.frequency === 'interval' && schedule.intervalMode === 'completion') {
-			const expiresAt = intervalCompletionExpiresAt(schedule, completedAt);
-			return expiresAt !== null && expiresAt > reference;
-		}
-
-		const windowStart = getResetWindowStart(schedule, reference);
-
-		return windowStart !== null && completedAt >= windowStart;
 	}
 
 	function sectionProgress(section: ChecklistSection): { done: number; total: number } {
@@ -98,7 +121,7 @@
 	}
 
 	function completionDate(record: CompletionRecord | undefined): Date | null {
-		if (!record) return null;
+		if (!record?.completedAt) return null;
 
 		const completedAt = new Date(record.completedAt);
 		return Number.isNaN(completedAt.getTime()) ? null : completedAt;
@@ -131,6 +154,145 @@
 
 	function titleCase(value: string): string {
 		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+	}
+
+	function taskRepeatCount(task: ChecklistTask): number {
+		return positiveInteger(task.repeatCount);
+	}
+
+	function taskCarryoverCapacity(task: ChecklistTask): number {
+		return Math.max(taskRepeatCount(task), positiveInteger(task.maxCarryover));
+	}
+
+	function taskHasCarryover(task: ChecklistTask): boolean {
+		return taskCarryoverCapacity(task) > taskRepeatCount(task);
+	}
+
+	function positiveInteger(value: number | undefined): number {
+		return Math.max(1, Math.floor(value ?? 1));
+	}
+
+	function taskCompletionCount(
+		schedule: RecurringSchedule,
+		record: CompletionRecord | undefined,
+		reference: Date
+	): number {
+		return completionLog(record).filter((completedAt) =>
+			completionCountsForSchedule(schedule, completedAt, reference)
+		).length;
+	}
+
+	function completionCountsForSchedule(
+		schedule: RecurringSchedule,
+		completedAtValue: string,
+		reference: Date
+	): boolean {
+		const completedAt = new Date(completedAtValue);
+		if (Number.isNaN(completedAt.getTime())) return false;
+
+		if (schedule.frequency === 'interval' && schedule.intervalMode === 'completion') {
+			const expiresAt = intervalCompletionExpiresAt(schedule, completedAt);
+			return expiresAt !== null && expiresAt > reference;
+		}
+
+		const windowStart = getResetWindowStart(schedule, reference);
+		return windowStart !== null && completedAt >= windowStart;
+	}
+
+	function completionLog(record: CompletionRecord | undefined): string[] {
+		if (!record) return [];
+
+		const values = Array.isArray(record.completionLog) ? record.completionLog : [];
+		const log = values.filter((value) => typeof value === 'string');
+		if (record.completedAt && log.length === 0) return [record.completedAt];
+
+		return log;
+	}
+
+	function appendCompletion(record: CompletionRecord | undefined, completedAt: string): string[] {
+		return [...completionLog(record), completedAt].slice(-100);
+	}
+
+	function bankedTaskStatus(
+		section: ChecklistSection,
+		task: ChecklistTask,
+		record: CompletionRecord | undefined
+	): BankedTaskStatus {
+		const schedule = effectiveTaskSchedule(section, task);
+		const repeatCount = taskRepeatCount(task);
+		const capacity = taskCarryoverCapacity(task);
+		const windowStart = getResetWindowStart(schedule, now);
+		const lastAccruedAt = record?.lastAccruedAt ?? windowStart?.toISOString();
+		let available =
+			typeof record?.availableCount === 'number' && Number.isFinite(record.availableCount)
+				? Math.max(0, Math.floor(record.availableCount))
+				: capacity;
+
+		if (!windowStart || !lastAccruedAt) {
+			return {
+				available: Math.min(capacity, available),
+				capacity,
+				lastAccruedAt
+			};
+		}
+
+		const elapsedWindows = countResetWindowsSince(schedule, lastAccruedAt, windowStart);
+		available = Math.min(capacity, available + elapsedWindows * repeatCount);
+
+		return {
+			available,
+			capacity,
+			lastAccruedAt: windowStart.toISOString()
+		};
+	}
+
+	function countResetWindowsSince(
+		schedule: RecurringSchedule,
+		lastAccruedAtValue: string,
+		currentWindowStart: Date
+	): number {
+		const lastAccruedAt = new Date(lastAccruedAtValue);
+		if (Number.isNaN(lastAccruedAt.getTime())) return 0;
+
+		let count = 0;
+		let cursor = getNextReset(schedule, lastAccruedAt);
+		while (cursor && cursor <= currentWindowStart && count < 10000) {
+			count += 1;
+			cursor = getNextReset(schedule, new Date(cursor.getTime() + 1));
+		}
+
+		return count;
+	}
+
+	function taskUnitStatus(section: ChecklistSection, task: ChecklistTask): string {
+		const completion = getCompletion(checklist.id, section.id, task.id);
+		if (taskHasCarryover(task)) {
+			const status = bankedTaskStatus(section, task, completion);
+			const done = bankedCompletionCount(status, completion);
+			return `${done} done / ${status.available} available`;
+		}
+
+		const schedule = effectiveTaskSchedule(section, task);
+		return `${taskCompletionCount(schedule, completion, now)} / ${taskRepeatCount(task)} done`;
+	}
+
+	function taskUsesUnitControls(task: ChecklistTask): boolean {
+		return taskRepeatCount(task) > 1 || taskHasCarryover(task);
+	}
+
+	function bankedCompletionCount(
+		status: BankedTaskStatus,
+		record: CompletionRecord | undefined
+	): number {
+		if (!status.lastAccruedAt) return completionLog(record).length;
+
+		const accruedAt = new Date(status.lastAccruedAt);
+		if (Number.isNaN(accruedAt.getTime())) return 0;
+
+		return completionLog(record).filter((completedAt) => {
+			const date = new Date(completedAt);
+			return !Number.isNaN(date.getTime()) && date >= accruedAt;
+		}).length;
 	}
 </script>
 
@@ -177,38 +339,89 @@
 							{@const schedule = effectiveTaskSchedule(section, task)}
 							{@const completion = getCompletion(checklist.id, section.id, task.id)}
 							{@const clearTime = completionIntervalClearTime(schedule, completion)}
-							<label
-								class="flex cursor-pointer gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
-							>
-								<input
-									class="checkbox mt-1"
-									type="checkbox"
-									checked={taskIsDone(section, task)}
-									onchange={(event) => toggleTask(section, task, event.currentTarget.checked)}
-								/>
-								<span class="min-w-0 flex-1">
-									<span class="block font-medium text-surface-50">{task.title}</span>
-									{#if task.notes}
-										<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
-									{/if}
-									{#if task.schedule}
-										<span class="mt-2 block text-xs text-surface-400">
-											Custom schedule: {describeViewSchedule(schedule, now)}
-										</span>
-									{/if}
-									{#if schedule.frequency === 'interval' && schedule.intervalMode === 'completion'}
-										{#if clearTime}
-											<span class="mt-1 block text-xs text-surface-400">
-												Resets: {formatLocalReset(clearTime)}
+							{@const usesUnitControls = taskUsesUnitControls(task)}
+							{#if usesUnitControls}
+								<article
+									class="grid gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+								>
+									<div class="min-w-0 flex-1">
+										<div class="flex flex-wrap items-center gap-2">
+											<span class="font-medium text-surface-50">{task.title}</span>
+											{#if taskIsDone(section, task)}
+												<span class="badge preset-tonal-success">Done</span>
+											{/if}
+										</div>
+										{#if task.notes}
+											<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
+										{/if}
+										{#if task.schedule}
+											<span class="mt-2 block text-xs text-surface-400">
+												Custom schedule: {describeViewSchedule(schedule, now)}
 											</span>
 										{/if}
-									{:else if task.schedule}
-										<span class="mt-1 block text-xs text-surface-400">
-											Next reset: {formatLocalReset(getNextReset(schedule, now))}
+										{#if schedule.frequency === 'interval' && schedule.intervalMode === 'completion'}
+											{#if clearTime}
+												<span class="mt-1 block text-xs text-surface-400">
+													Resets: {formatLocalReset(clearTime)}
+												</span>
+											{/if}
+										{:else if task.schedule}
+											<span class="mt-1 block text-xs text-surface-400">
+												Next reset: {formatLocalReset(getNextReset(schedule, now))}
+											</span>
+										{/if}
+									</div>
+									<div class="flex shrink-0 flex-wrap items-center gap-2 sm:justify-end">
+										<span class="text-sm font-medium text-surface-300">
+											{taskUnitStatus(section, task)}
 										</span>
-									{/if}
-								</span>
-							</label>
+										<button
+											class="btn btn-sm preset-filled-primary-500"
+											type="button"
+											title="Add one completion"
+											aria-label={`Add one completion for ${task.title}`}
+											disabled={taskIsDone(section, task)}
+											onclick={() => completeTaskUnit(section, task)}
+										>
+											<Plus size={16} aria-hidden="true" />
+											<span>Done</span>
+										</button>
+									</div>
+								</article>
+							{:else}
+								<label
+									class="flex cursor-pointer gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
+								>
+									<input
+										class="checkbox mt-1"
+										type="checkbox"
+										checked={taskIsDone(section, task)}
+										onchange={(event) => toggleTask(section, task, event.currentTarget.checked)}
+									/>
+									<span class="min-w-0 flex-1">
+										<span class="block font-medium text-surface-50">{task.title}</span>
+										{#if task.notes}
+											<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
+										{/if}
+										{#if task.schedule}
+											<span class="mt-2 block text-xs text-surface-400">
+												Custom schedule: {describeViewSchedule(schedule, now)}
+											</span>
+										{/if}
+										{#if schedule.frequency === 'interval' && schedule.intervalMode === 'completion'}
+											{#if clearTime}
+												<span class="mt-1 block text-xs text-surface-400">
+													Resets: {formatLocalReset(clearTime)}
+												</span>
+											{/if}
+										{:else if task.schedule}
+											<span class="mt-1 block text-xs text-surface-400">
+												Next reset: {formatLocalReset(getNextReset(schedule, now))}
+											</span>
+										{/if}
+									</span>
+								</label>
+							{/if}
 						{/each}
 					{/if}
 				</div>

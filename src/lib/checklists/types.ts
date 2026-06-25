@@ -23,6 +23,8 @@ export type ChecklistTask = {
 	title: string;
 	notes?: string;
 	schedule?: RecurringSchedule;
+	repeatCount?: number;
+	maxCarryover?: number;
 };
 
 export type ChecklistSection = {
@@ -41,7 +43,10 @@ export type Checklist = {
 };
 
 export type CompletionRecord = {
-	completedAt: string;
+	completedAt?: string;
+	completionLog?: string[];
+	availableCount?: number;
+	lastAccruedAt?: string;
 };
 
 export type CompletionState = Record<string, Record<string, Record<string, CompletionRecord>>>;
@@ -65,6 +70,8 @@ export type PortableChecklistExport = {
 				title: string;
 				notes?: string;
 				schedule?: RecurringSchedule;
+				repeatCount?: number;
+				maxCarryover?: number;
 			}>;
 		}>;
 	};

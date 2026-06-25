@@ -21,6 +21,7 @@
 		moveArrayItem,
 		normalizeLinkKey,
 		normalizeSchedule,
+		normalizeTaskCounts,
 		saveAppState,
 		titleCase,
 		weekdays
@@ -114,7 +115,8 @@
 					...task,
 					title: task.title.trim() || 'Untitled task',
 					notes: task.notes?.trim() || undefined,
-					schedule: task.schedule ? (normalizeSchedule(task.schedule) ?? undefined) : undefined
+					schedule: task.schedule ? (normalizeSchedule(task.schedule) ?? undefined) : undefined,
+					...normalizeTaskCounts(task)
 				}))
 			}))
 		};
@@ -302,7 +304,9 @@
 		return {
 			id: createId(),
 			title,
-			notes: ''
+			notes: '',
+			repeatCount: undefined,
+			maxCarryover: undefined
 		};
 	}
 
@@ -401,6 +405,36 @@
 
 	function updateIntervalAnchorTime(schedule: RecurringSchedule, time: string): void {
 		updateIntervalAnchor(schedule, `${intervalAnchorDate(schedule)}T${time}`);
+	}
+
+	function taskRepeatCount(task: ChecklistTask): number {
+		return Math.max(1, Math.floor(task.repeatCount ?? 1));
+	}
+
+	function taskMaxCarryover(task: ChecklistTask): number {
+		return Math.max(taskRepeatCount(task), Math.floor(task.maxCarryover ?? taskRepeatCount(task)));
+	}
+
+	function updateTaskRepeatCount(task: ChecklistTask, value: string): void {
+		const repeatCount = Math.max(1, Math.floor(Number(value) || 1));
+		if (repeatCount > 1) {
+			task.repeatCount = repeatCount;
+		} else {
+			delete task.repeatCount;
+		}
+
+		if (task.maxCarryover !== undefined && task.maxCarryover < repeatCount) {
+			task.maxCarryover = repeatCount;
+		}
+	}
+
+	function updateTaskMaxCarryover(task: ChecklistTask, value: string): void {
+		const maxCarryover = Math.max(1, Math.floor(Number(value) || 1));
+		if (maxCarryover > taskRepeatCount(task)) {
+			task.maxCarryover = maxCarryover;
+		} else {
+			delete task.maxCarryover;
+		}
 	}
 </script>
 
@@ -754,6 +788,35 @@
 												rows="2"
 												placeholder="Optional notes"></textarea>
 										</label>
+										<div class="grid gap-3 sm:grid-cols-2">
+											<label class="label">
+												<span class="label-text">Repeats per reset</span>
+												<input
+													class="input"
+													type="number"
+													min="1"
+													step="1"
+													value={taskRepeatCount(task)}
+													oninput={(event) =>
+														updateTaskRepeatCount(task, event.currentTarget.value)}
+												/>
+											</label>
+											<label class="label">
+												<span class="label-text">Stored attempt cap</span>
+												<input
+													class="input"
+													type="number"
+													min={taskRepeatCount(task)}
+													step="1"
+													value={taskMaxCarryover(task)}
+													oninput={(event) =>
+														updateTaskMaxCarryover(task, event.currentTarget.value)}
+												/>
+												<span class="text-xs text-surface-400">
+													Set higher than repeats when attempts can carry over.
+												</span>
+											</label>
+										</div>
 										<div class="rounded-base border border-surface-800 bg-surface-950 p-3">
 											<div
 												class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"

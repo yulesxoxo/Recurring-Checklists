@@ -13,19 +13,22 @@
 				},
 				"tasks": [
 					{
-						"title": "Unstable Space 2x"
+						"title": "Unstable Space",
+						"repeatCount": 2
 					},
 					{
 						"title": "Bureau Commissions",
-						"notes": "1 attempt per day stores up to 3"
+						"maxCarryover": 3
 					},
 					{
-						"title": "Elite Hunt 2x",
-						"notes": "2 attempts per day stores up to 6"
+						"title": "Elite Hunt",
+						"repeatCount": 2,
+						"maxCarryover": 6
 					},
 					{
-						"title": "Boss Hunt 2x",
-						"notes": "2 attempts per day stores up to 6"
+						"title": "Boss Hunt",
+						"repeatCount": 2,
+						"maxCarryover": 6
 					},
 					{
 						"title": "Guild Check-in"
@@ -54,7 +57,8 @@
 				},
 				"tasks": [
 					{
-						"title": "World Boss Crusade 3x"
+						"title": "World Boss Crusade",
+						"repeatCount": 3
 					},
 					{
 						"title": "Raid S1"
@@ -69,20 +73,24 @@
 						"title": "Slumberdream Valley"
 					},
 					{
-						"title": "Starland Timed Events x12"
+						"title": "Starland Timed Events",
+						"repeatCount": 12
 					},
 					{
-						"title": "Starland Permanent Events x6"
+						"title": "Starland Permanent Events",
+						"repeatCount": 6
 					},
 					{
 						"title": "Friendship Points 2000"
 					},
 					{
-						"title": "Dungeon Henry Chest x5"
+						"title": "Dungeon Henry Chest",
+						"repeatCount": 5
 					},
 					{
 						"title": "Musician: Weekly Challenges",
-						"notes": "5x 150 EXP"
+						"notes": "5x 150 EXP",
+						"repeatCount": 5
 					}
 				]
 			},

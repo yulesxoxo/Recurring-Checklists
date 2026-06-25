@@ -1,5 +1,5 @@
 import { STORAGE_KEY } from './constants';
-import { isRecord, normalizeLinkKey, normalizeSchedule } from './core';
+import { isRecord, normalizeLinkKey, normalizeSchedule, normalizeTaskCounts } from './core';
 import type {
 	AppState,
 	Checklist,
@@ -99,6 +99,7 @@ function normalizeTask(value: unknown): ChecklistTask | null {
 		id: value.id,
 		title: value.title,
 		notes: typeof value.notes === 'string' ? value.notes : undefined,
-		...(schedule ? { schedule } : {})
+		...(schedule ? { schedule } : {}),
+		...normalizeTaskCounts(value)
 	};
 }

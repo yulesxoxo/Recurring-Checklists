@@ -388,6 +388,38 @@ describe('portable exports', () => {
 			}
 		});
 	});
+
+	it('includes task repeat counts and carryover caps', () => {
+		const exported = exportPortableChecklist({
+			id: 'checklist-1',
+			name: 'Operations',
+			description: '',
+			sections: [
+				{
+					id: 'section-1',
+					name: 'Daily',
+					defaultSchedule: {
+						frequency: 'daily',
+						anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+					},
+					tasks: [
+						{
+							id: 'task-1',
+							title: 'Elite Hunt',
+							repeatCount: 2,
+							maxCarryover: 6
+						}
+					]
+				}
+			]
+		});
+
+		expect(exported.checklist.sections[0].tasks[0]).toEqual({
+			title: 'Elite Hunt',
+			repeatCount: 2,
+			maxCarryover: 6
+		});
+	});
 });
 
 describe('portable imports', () => {
@@ -455,6 +487,36 @@ describe('portable imports', () => {
 		expect(result.ok).toBe(true);
 		if (!result.ok) return;
 		expect(result.checklist.sections[0].tasks[0].schedule).toBeUndefined();
+	});
+
+	it('imports task repeat counts and carryover caps', () => {
+		const result = importPortableChecklists(
+			JSON.stringify({
+				version: 1,
+				checklist: {
+					name: 'Operations',
+					description: '',
+					sections: [
+						{
+							name: 'Daily',
+							defaultSchedule: {
+								frequency: 'daily',
+								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+							},
+							tasks: [{ title: 'Elite Hunt', repeatCount: 2, maxCarryover: 6 }]
+						}
+					]
+				}
+			})
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.checklist.sections[0].tasks[0]).toMatchObject({
+			title: 'Elite Hunt',
+			repeatCount: 2,
+			maxCarryover: 6
+		});
 	});
 
 	it('rejects malformed schedules before import', () => {

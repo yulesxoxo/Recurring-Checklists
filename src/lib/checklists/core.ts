@@ -73,7 +73,9 @@ export function exportPortableChecklist(checklist: Checklist): PortableChecklist
 				tasks: section.tasks.map((task) => ({
 					title: task.title,
 					...(task.notes ? { notes: task.notes } : {}),
-					...(task.schedule ? { schedule: { ...task.schedule } } : {})
+					...(task.schedule ? { schedule: { ...task.schedule } } : {}),
+					...(task.repeatCount && task.repeatCount > 1 ? { repeatCount: task.repeatCount } : {}),
+					...(task.maxCarryover && task.maxCarryover > 1 ? { maxCarryover: task.maxCarryover } : {})
 				}))
 			}))
 		}
@@ -176,7 +178,8 @@ export function importPortableChecklists(
 				id: idFactory(),
 				title: task.title.trim() || 'Untitled task',
 				notes: task.notes?.trim() || undefined,
-				...(schedule ? { schedule } : {})
+				...(schedule ? { schedule } : {}),
+				...normalizeTaskCounts(task)
 			});
 		}
 
@@ -341,4 +344,25 @@ function legacyResetTime(value: Record<string, unknown>): string {
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
+}
+
+export function normalizeTaskCounts(value: Record<string, unknown>): {
+	repeatCount?: number;
+	maxCarryover?: number;
+} {
+	const repeatCount = normalizePositiveInteger(value.repeatCount);
+	const maxCarryover = normalizePositiveInteger(value.maxCarryover);
+
+	return {
+		...(repeatCount > 1 ? { repeatCount } : {}),
+		...(maxCarryover > 1 ? { maxCarryover: Math.max(maxCarryover, repeatCount) } : {})
+	};
+}
+
+function normalizePositiveInteger(value: unknown): number {
+	const numeric =
+		typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+	if (!Number.isFinite(numeric)) return 1;
+
+	return Math.max(1, Math.floor(numeric));
 }
