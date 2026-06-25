@@ -124,30 +124,21 @@
 			description: 'Daily, weekly, and bi-weekly operating checks with UTC reset windows.',
 			linkKey: 'NTE',
 			sections: [
-				{
-					...createSection('Daily', 'daily'),
-					tasks: [
-						createTask('Review open exceptions'),
-						createTask('Confirm required reports were generated'),
-						createTask('Record follow-ups for blocked items')
-					]
-				},
-				{
-					...createSection('Weekly', 'weekly'),
-					tasks: [
-						createTask('Audit recurring checklist coverage'),
-						createTask('Review aged unresolved items'),
-						createTask('Update weekly summary')
-					]
-				},
-				{
-					...createSection('Bi-Weekly', 'biweekly'),
-					tasks: [
-						createTask('Review process drift'),
-						createTask('Refresh escalation owners'),
-						createTask('Validate bi-weekly reporting inputs')
-					]
-				}
+				createSection('Daily', 'daily', [
+					'Review open exceptions',
+					'Confirm required reports were generated',
+					'Record follow-ups for blocked items'
+				]),
+				createSection('Weekly', 'weekly', [
+					'Audit recurring checklist coverage',
+					'Review aged unresolved items',
+					'Update weekly summary'
+				]),
+				createSection('Bi-Weekly', 'biweekly', [
+					'Review process drift',
+					'Refresh escalation owners',
+					'Validate bi-weekly reporting inputs'
+				])
 			]
 		};
 
@@ -161,35 +152,41 @@
 		onPersist();
 	}
 
-	function createSection(name: string, frequency: Frequency): ChecklistSection {
+	function createSection(
+		name: string,
+		frequency: Frequency,
+		taskTitles: string[] = ['New task']
+	): ChecklistSection {
 		const resetWeekday = frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined;
+		const defaultSchedule = normalizeSchedule(
+			{
+				frequency,
+				resetWeekday,
+				anchorDateTimeUtc:
+					frequency === 'biweekly'
+						? `${alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')}T05:00:00.000Z`
+						: `${todayUtc()}T05:00:00.000Z`
+			},
+			{}
+		) ?? {
+			frequency: 'daily',
+			anchorDateTimeUtc: `${todayUtc()}T05:00:00.000Z`
+		};
 
 		return {
 			id: createId(),
 			name,
-			schedule: normalizeSchedule(
-				{
-					frequency,
-					resetWeekday,
-					anchorDateTimeUtc:
-						frequency === 'biweekly'
-							? `${alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')}T05:00:00.000Z`
-							: `${todayUtc()}T05:00:00.000Z`
-				},
-				{}
-			) ?? {
-				frequency: 'daily',
-				anchorDateTimeUtc: `${todayUtc()}T05:00:00.000Z`
-			},
-			tasks: [createTask('New task')]
+			defaultSchedule,
+			tasks: taskTitles.map((title) => createTask(title, defaultSchedule))
 		};
 	}
 
-	function createTask(title: string): ChecklistTask {
+	function createTask(title: string, schedule: ChecklistTask['schedule']): ChecklistTask {
 		return {
 			id: createId(),
 			title,
-			notes: ''
+			notes: '',
+			schedule: JSON.parse(JSON.stringify(schedule)) as ChecklistTask['schedule']
 		};
 	}
 

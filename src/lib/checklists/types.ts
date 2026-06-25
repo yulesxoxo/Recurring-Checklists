@@ -22,12 +22,13 @@ export type ChecklistTask = {
 	id: string;
 	title: string;
 	notes?: string;
+	schedule: RecurringSchedule;
 };
 
 export type ChecklistSection = {
 	id: string;
 	name: string;
-	schedule: RecurringSchedule;
+	defaultSchedule: RecurringSchedule;
 	tasks: ChecklistTask[];
 };
 
@@ -59,10 +60,11 @@ export type PortableChecklistExport = {
 		linkKey?: string;
 		sections: Array<{
 			name: string;
-			schedule: RecurringSchedule;
+			defaultSchedule: RecurringSchedule;
 			tasks: Array<{
 				title: string;
 				notes?: string;
+				schedule: RecurringSchedule;
 			}>;
 		}>;
 	};

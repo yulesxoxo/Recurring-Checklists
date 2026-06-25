@@ -6,8 +6,7 @@
 		type ChecklistSection,
 		type ChecklistTask,
 		type CompletionRecord,
-		countTasks,
-		titleCase
+		countTasks
 	} from '$lib/checklists';
 	import {
 		describeSchedule,
@@ -49,7 +48,7 @@
 	}
 
 	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
-		return isTaskComplete(section, getCompletion(checklist.id, section.id, task.id), now);
+		return isTaskComplete(task, getCompletion(checklist.id, section.id, task.id), now);
 	}
 
 	function getCompletion(
@@ -61,7 +60,7 @@
 	}
 
 	function isTaskComplete(
-		section: ChecklistSection,
+		task: ChecklistTask,
 		record: CompletionRecord | undefined,
 		reference: Date
 	): boolean {
@@ -70,15 +69,12 @@
 		const completedAt = new Date(record.completedAt);
 		if (Number.isNaN(completedAt.getTime())) return false;
 
-		if (
-			section.schedule.frequency === 'interval' &&
-			section.schedule.intervalMode === 'completion'
-		) {
-			const expiresAt = intervalCompletionExpiresAt(section.schedule, completedAt);
+		if (task.schedule.frequency === 'interval' && task.schedule.intervalMode === 'completion') {
+			const expiresAt = intervalCompletionExpiresAt(task.schedule, completedAt);
 			return expiresAt !== null && expiresAt > reference;
 		}
 
-		const windowStart = getResetWindowStart(section.schedule, reference);
+		const windowStart = getResetWindowStart(task.schedule, reference);
 
 		return windowStart !== null && completedAt >= windowStart;
 	}
@@ -117,22 +113,12 @@
 				>
 					<div class="min-w-0">
 						<h2 class="text-xl font-semibold text-surface-50">{section.name}</h2>
-						<p class="mt-1 text-sm text-surface-400">{describeSchedule(section.schedule)}</p>
-						{#if !(section.schedule.frequency === 'interval' && section.schedule.intervalMode === 'completion')}
-							<p class="mt-1 text-sm text-surface-400">
-								Next reset local: {formatLocalReset(getNextReset(section.schedule, now))}
-							</p>
-							<p class="mt-1 text-sm text-surface-400">
-								Next reset UTC: {formatUtcReset(getNextReset(section.schedule, now))}
-							</p>
-						{/if}
 					</div>
 					<div class="flex flex-wrap items-center gap-2">
 						<span class="badge preset-tonal-success">
 							<CheckCircle2 size={14} aria-hidden="true" />
 							{progress.done} / {progress.total} done
 						</span>
-						<span class="badge preset-tonal-surface">{titleCase(section.schedule.frequency)}</span>
 					</div>
 				</div>
 
@@ -158,6 +144,17 @@
 									<span class="block font-medium text-surface-50">{task.title}</span>
 									{#if task.notes}
 										<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
+									{/if}
+									<span class="mt-2 block text-xs text-surface-400">
+										{describeSchedule(task.schedule)}
+									</span>
+									{#if !(task.schedule.frequency === 'interval' && task.schedule.intervalMode === 'completion')}
+										<span class="mt-1 block text-xs text-surface-400">
+											Next reset local: {formatLocalReset(getNextReset(task.schedule, now))}
+										</span>
+										<span class="mt-1 block text-xs text-surface-400">
+											Next reset UTC: {formatUtcReset(getNextReset(task.schedule, now))}
+										</span>
 									{/if}
 								</span>
 							</label>

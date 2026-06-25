@@ -68,10 +68,11 @@ export function exportPortableChecklist(checklist: Checklist): PortableChecklist
 			...(checklist.linkKey ? { linkKey: checklist.linkKey } : {}),
 			sections: checklist.sections.map((section) => ({
 				name: section.name,
-				schedule: { ...section.schedule },
+				defaultSchedule: { ...section.defaultSchedule },
 				tasks: section.tasks.map((task) => ({
 					title: task.title,
-					...(task.notes ? { notes: task.notes } : {})
+					...(task.notes ? { notes: task.notes } : {}),
+					schedule: { ...task.schedule }
 				}))
 			}))
 		}
@@ -140,11 +141,11 @@ export function importPortableChecklists(
 			};
 		}
 
-		const schedule = normalizePortableSchedule(section.schedule, options);
-		if (!schedule) {
+		const defaultSchedule = normalizePortableSchedule(section.defaultSchedule, options);
+		if (!defaultSchedule) {
 			return {
 				ok: false,
-				error: `Section "${section.name}" has an unsupported or malformed schedule.`
+				error: `Section "${section.name}" has an unsupported or malformed default schedule.`
 			};
 		}
 
@@ -161,17 +162,26 @@ export function importPortableChecklists(
 				};
 			}
 
+			const schedule = normalizePortableSchedule(task.schedule, options);
+			if (!schedule) {
+				return {
+					ok: false,
+					error: `Task ${taskIndex + 1} in section "${section.name}" has an unsupported or malformed schedule.`
+				};
+			}
+
 			tasks.push({
 				id: idFactory(),
 				title: task.title.trim() || 'Untitled task',
-				notes: task.notes?.trim() || undefined
+				notes: task.notes?.trim() || undefined,
+				schedule
 			});
 		}
 
 		sections.push({
 			id: idFactory(),
 			name: section.name.trim() || 'Untitled section',
-			schedule,
+			defaultSchedule,
 			tasks
 		});
 	}

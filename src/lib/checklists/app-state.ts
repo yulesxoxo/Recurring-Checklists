@@ -75,13 +75,13 @@ function normalizeSection(value: unknown, options: ChecklistParseOptions): Check
 	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.name !== 'string')
 		return null;
 
-	const schedule = normalizeSchedule(value.schedule, options);
-	if (!schedule) return null;
+	const defaultSchedule = normalizeSchedule(value.defaultSchedule, options);
+	if (!defaultSchedule) return null;
 
 	return {
 		id: value.id,
 		name: value.name,
-		schedule,
+		defaultSchedule,
 		tasks: Array.isArray(value.tasks)
 			? value.tasks.map(normalizeTask).filter((task): task is ChecklistTask => task !== null)
 			: []
@@ -92,9 +92,13 @@ function normalizeTask(value: unknown): ChecklistTask | null {
 	if (!isRecord(value) || typeof value.id !== 'string' || typeof value.title !== 'string')
 		return null;
 
+	const schedule = normalizeSchedule(value.schedule);
+	if (!schedule) return null;
+
 	return {
 		id: value.id,
 		title: value.title,
-		notes: typeof value.notes === 'string' ? value.notes : undefined
+		notes: typeof value.notes === 'string' ? value.notes : undefined,
+		schedule
 	};
 }

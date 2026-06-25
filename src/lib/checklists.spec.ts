@@ -66,8 +66,21 @@ describe('checklist storage', () => {
 						{
 							id: 'section-1',
 							name: 'Daily',
-							schedule: { frequency: 'daily', anchorDateTimeUtc: '2026-06-24T05:00:00.000Z' },
-							tasks: [{ id: 'task-1', title: 'Review queue', notes: 'Escalate blockers' }]
+							defaultSchedule: {
+								frequency: 'daily',
+								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+							},
+							tasks: [
+								{
+									id: 'task-1',
+									title: 'Review queue',
+									notes: 'Escalate blockers',
+									schedule: {
+										frequency: 'daily',
+										anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+									}
+								}
+							]
 						}
 					]
 				}
@@ -94,7 +107,7 @@ describe('checklist storage', () => {
 		expect(loadAppState(storage)).toEqual(createEmptyAppState());
 	});
 
-	it('drops unsupported legacy schedules without losing valid sections', () => {
+	it('drops unsupported schedules without losing valid sections', () => {
 		const storage = new MemoryStorage();
 		storage.setItem(
 			STORAGE_KEY,
@@ -108,14 +121,17 @@ describe('checklist storage', () => {
 						sections: [
 							{
 								id: 'section-1',
-								name: 'Every minute',
-								schedule: { frequency: 'minutely', resetTimeUtc: '00:00' },
+								name: 'Unsupported',
+								defaultSchedule: { frequency: 'unsupported' },
 								tasks: []
 							},
 							{
 								id: 'section-2',
 								name: 'Daily',
-								schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
+								defaultSchedule: {
+									frequency: 'daily',
+									anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+								},
 								tasks: []
 							}
 						]
@@ -126,7 +142,7 @@ describe('checklist storage', () => {
 		);
 
 		expect(loadAppState(storage).checklists[0].sections).toHaveLength(1);
-		expect(loadAppState(storage).checklists[0].sections[0].schedule.frequency).toBe('daily');
+		expect(loadAppState(storage).checklists[0].sections[0].defaultSchedule.frequency).toBe('daily');
 	});
 });
 
@@ -311,8 +327,21 @@ describe('portable exports', () => {
 						{
 							id: 'section-1',
 							name: 'Daily',
-							schedule: { frequency: 'daily', anchorDateTimeUtc: '2026-06-24T05:00:00.000Z' },
-							tasks: [{ id: 'task-1', title: 'Review queue', notes: 'Escalate blockers' }]
+							defaultSchedule: {
+								frequency: 'daily',
+								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+							},
+							tasks: [
+								{
+									id: 'task-1',
+									title: 'Review queue',
+									notes: 'Escalate blockers',
+									schedule: {
+										frequency: 'daily',
+										anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+									}
+								}
+							]
 						}
 					]
 				}
@@ -340,11 +369,20 @@ describe('portable exports', () => {
 				sections: [
 					{
 						name: 'Daily',
-						schedule: {
+						defaultSchedule: {
 							frequency: 'daily',
 							anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
 						},
-						tasks: [{ title: 'Review queue', notes: 'Escalate blockers' }]
+						tasks: [
+							{
+								title: 'Review queue',
+								notes: 'Escalate blockers',
+								schedule: {
+									frequency: 'daily',
+									anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+								}
+							}
+						]
 					}
 				]
 			}
@@ -365,8 +403,19 @@ describe('portable imports', () => {
 					sections: [
 						{
 							name: 'Daily',
-							schedule: { frequency: 'daily', resetTimeUtc: '05:00' },
-							tasks: [{ title: 'Review queue' }]
+							defaultSchedule: {
+								frequency: 'daily',
+								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+							},
+							tasks: [
+								{
+									title: 'Review queue',
+									schedule: {
+										frequency: 'daily',
+										anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+									}
+								}
+							]
 						}
 					]
 				}
@@ -392,7 +441,7 @@ describe('portable imports', () => {
 					sections: [
 						{
 							name: 'Bad',
-							schedule: { frequency: 'daily', resetTimeUtc: '25:00' },
+							defaultSchedule: { frequency: 'daily', anchorDateTimeUtc: 'bad' },
 							tasks: []
 						}
 					]
