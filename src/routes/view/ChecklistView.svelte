@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Switch } from '@skeletonlabs/skeleton-svelte';
 	import { CheckCircle2 } from '@lucide/svelte';
+	import ChecklistTaskButton from './ChecklistTaskButton.svelte';
 	import {
 		type AppState,
 		type Checklist,
@@ -136,21 +137,6 @@
 		task: ChecklistTask
 	): RecurringSchedule {
 		return task.schedule ?? section.defaultSchedule;
-	}
-
-	function completionDate(record: CompletionRecord | undefined): Date | null {
-		if (!record?.completedAt) return null;
-
-		const completedAt = new Date(record.completedAt);
-		return Number.isNaN(completedAt.getTime()) ? null : completedAt;
-	}
-
-	function completionIntervalClearTime(
-		schedule: RecurringSchedule,
-		record: CompletionRecord | undefined
-	): Date | null {
-		const completedAt = completionDate(record);
-		return completedAt ? intervalCompletionExpiresAt(schedule, completedAt) : null;
 	}
 
 	function describeViewSchedule(schedule: RecurringSchedule, reference: Date): string {
@@ -398,70 +384,26 @@
 						{#each tasks as task (task.id)}
 							{@const schedule = effectiveTaskSchedule(section, task)}
 							{@const completion = getCompletion(checklist.id, section.id, task.id)}
-							{@const clearTime = completionIntervalClearTime(schedule, completion)}
 							{@const usesUnitControls = taskUsesUnitControls(task)}
 							{#if usesUnitControls}
-								<button
-									type="button"
-									class={`flex w-full cursor-pointer select-none gap-3 rounded-base border p-3 text-left transition ${taskRowClass(section, task)}`}
-									onclick={(event) => toggleTaskUnitRow(event, section, task)}
-								>
-									<span class="min-w-0 flex-1">
-										<span class="flex flex-wrap items-center gap-2">
-											<span class="font-medium text-surface-50">{task.title}</span>
-											<span class="badge preset-tonal-primary">{taskUnitStatus(section, task)}</span
-											>
-										</span>
-										{#if task.notes}
-											<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
-										{/if}
-										{#if task.schedule}
-											<span class="mt-2 block text-xs text-surface-400">
-												Custom schedule: {describeViewSchedule(schedule, now)}
-											</span>
-										{/if}
-										{#if schedule.frequency === 'interval' && schedule.intervalMode === 'completion'}
-											{#if clearTime}
-												<span class="mt-1 block text-xs text-surface-400">
-													Resets: {formatLocalReset(clearTime)}
-												</span>
-											{/if}
-										{:else if task.schedule}
-											<span class="mt-1 block text-xs text-surface-400">
-												Next reset: {formatLocalReset(getNextReset(schedule, now))}
-											</span>
-										{/if}
-									</span>
-								</button>
+								<ChecklistTaskButton
+									{task}
+									{schedule}
+									{now}
+									{completion}
+									rowClass={taskRowClass(section, task)}
+									countLabel={taskUnitStatus(section, task)}
+									onClick={(event) => toggleTaskUnitRow(event, section, task)}
+								/>
 							{:else}
-								<button
-									type="button"
-									class={`flex w-full cursor-pointer select-none gap-3 rounded-base border p-3 text-left transition ${taskRowClass(section, task)}`}
-									onclick={() => toggleTask(section, task)}
-								>
-									<span class="min-w-0 flex-1">
-										<span class="block font-medium text-surface-50">{task.title}</span>
-										{#if task.notes}
-											<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
-										{/if}
-										{#if task.schedule}
-											<span class="mt-2 block text-xs text-surface-400">
-												Custom schedule: {describeViewSchedule(schedule, now)}
-											</span>
-										{/if}
-										{#if schedule.frequency === 'interval' && schedule.intervalMode === 'completion'}
-											{#if clearTime}
-												<span class="mt-1 block text-xs text-surface-400">
-													Resets: {formatLocalReset(clearTime)}
-												</span>
-											{/if}
-										{:else if task.schedule}
-											<span class="mt-1 block text-xs text-surface-400">
-												Next reset: {formatLocalReset(getNextReset(schedule, now))}
-											</span>
-										{/if}
-									</span>
-								</button>
+								<ChecklistTaskButton
+									{task}
+									{schedule}
+									{now}
+									{completion}
+									rowClass={taskRowClass(section, task)}
+									onClick={() => toggleTask(section, task)}
+								/>
 							{/if}
 						{/each}
 					{/if}
