@@ -1,0 +1,104 @@
+{
+	"version": 1,
+	"checklist": {
+		"name": "Blue Protocol: Star Resonance",
+		"description": "",
+		"linkKey": "BPSR",
+		"sections": [
+			{
+				"name": "Daily",
+				"defaultSchedule": {
+					"frequency": "daily",
+					"anchorDateTimeUtc": "2026-06-25T07:00:00.000Z"
+				},
+				"tasks": [
+					{
+						"title": "Unstable Space 2x"
+					},
+					{
+						"title": "Bureau Commissions",
+						"notes": "1 attempt per day stores up to 3"
+					},
+					{
+						"title": "Elite Hunt 2x",
+						"notes": "2 attempts per day stores up to 6"
+					},
+					{
+						"title": "Boss Hunt 2x",
+						"notes": "2 attempts per day stores up to 6"
+					},
+					{
+						"title": "Guild Check-in"
+					},
+					{
+						"title": "Guild Cargo"
+					},
+					{
+						"title": "Daily Mission"
+					},
+					{
+						"title": "Mystery Store"
+					},
+					{
+						"title": "Musician: Daily Routine",
+						"notes": "50 EXP"
+					}
+				]
+			},
+			{
+				"name": "Weekly",
+				"defaultSchedule": {
+					"frequency": "weekly",
+					"resetWeekday": "monday",
+					"anchorDateTimeUtc": "2026-06-25T07:00:00.000Z"
+				},
+				"tasks": [
+					{
+						"title": "World Boss Crusade 3x"
+					},
+					{
+						"title": "Raid S1"
+					},
+					{
+						"title": "Raid S2"
+					},
+					{
+						"title": "Raid S3"
+					},
+					{
+						"title": "Slumberdream Valley"
+					},
+					{
+						"title": "Starland Timed Events x12"
+					},
+					{
+						"title": "Starland Permanent Events x6"
+					},
+					{
+						"title": "Friendship Points 2000"
+					},
+					{
+						"title": "Dungeon Henry Chest x5"
+					},
+					{
+						"title": "Musician: Weekly Challenges",
+						"notes": "5x 150 EXP"
+					}
+				]
+			},
+			{
+				"name": "Biweekly",
+				"defaultSchedule": {
+					"frequency": "biweekly",
+					"resetWeekday": "monday",
+					"anchorDateTimeUtc": "2026-06-29T03:00:00.000Z"
+				},
+				"tasks": [
+					{
+						"title": "Stimen Vaults"
+					}
+				]
+			}
+		]
+	}
+}
