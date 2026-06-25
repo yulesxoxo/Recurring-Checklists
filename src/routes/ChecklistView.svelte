@@ -40,18 +40,18 @@
 
 	let hideCompletedTasks = $state(true);
 
-	function toggleTask(section: ChecklistSection, task: ChecklistTask, checked: boolean): void {
+	function toggleTask(section: ChecklistSection, task: ChecklistTask): void {
 		appState.completions[checklist.id] ??= {};
 		appState.completions[checklist.id][section.id] ??= {};
 
-		if (checked) {
+		if (taskIsDone(section, task)) {
+			delete appState.completions[checklist.id][section.id][task.id];
+		} else {
 			const completedAt = new Date().toISOString();
 			appState.completions[checklist.id][section.id][task.id] = {
 				completedAt,
 				completionLog: [completedAt]
 			};
-		} else {
-			delete appState.completions[checklist.id][section.id][task.id];
 		}
 
 		now = new Date();
@@ -313,19 +313,28 @@
 		}).length;
 	}
 
-	function toggleTaskUnitRow(
-		event: MouseEvent,
-		section: ChecklistSection,
-		task: ChecklistTask
-	): void {
-		event.preventDefault();
-
+	function toggleTaskUnit(section: ChecklistSection, task: ChecklistTask): void {
 		if (taskIsDone(section, task)) {
 			resetTaskUnit(section, task);
 			return;
 		}
 
 		completeTaskUnit(section, task);
+	}
+
+	function toggleTaskUnitRow(
+		event: MouseEvent,
+		section: ChecklistSection,
+		task: ChecklistTask
+	): void {
+		event.preventDefault();
+		toggleTaskUnit(section, task);
+	}
+
+	function taskRowClass(section: ChecklistSection, task: ChecklistTask): string {
+		return taskIsDone(section, task) && !hideCompletedTasks
+			? 'border-surface-800 bg-surface-900 opacity-60 hover:bg-surface-900'
+			: 'border-surface-800 bg-surface-950 hover:bg-surface-800';
 	}
 
 	function updateHideCompleted(details: { checked: boolean }): void {
@@ -392,17 +401,11 @@
 							{@const clearTime = completionIntervalClearTime(schedule, completion)}
 							{@const usesUnitControls = taskUsesUnitControls(task)}
 							{#if usesUnitControls}
-								<label
-									class="flex cursor-pointer select-none gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
+								<button
+									type="button"
+									class={`flex w-full cursor-pointer select-none gap-3 rounded-base border p-3 text-left transition ${taskRowClass(section, task)}`}
 									onclick={(event) => toggleTaskUnitRow(event, section, task)}
 								>
-									<input
-										class="checkbox mt-1"
-										type="checkbox"
-										checked={taskIsDone(section, task)}
-										aria-label={`${task.title} attempts ${taskUnitStatus(section, task)}`}
-										readonly
-									/>
 									<span class="min-w-0 flex-1">
 										<span class="flex flex-wrap items-center gap-2">
 											<span class="font-medium text-surface-50">{task.title}</span>
@@ -429,17 +432,13 @@
 											</span>
 										{/if}
 									</span>
-								</label>
+								</button>
 							{:else}
-								<label
-									class="flex cursor-pointer select-none gap-3 rounded-base border border-surface-800 bg-surface-950 p-3 transition hover:bg-surface-800"
+								<button
+									type="button"
+									class={`flex w-full cursor-pointer select-none gap-3 rounded-base border p-3 text-left transition ${taskRowClass(section, task)}`}
+									onclick={() => toggleTask(section, task)}
 								>
-									<input
-										class="checkbox mt-1"
-										type="checkbox"
-										checked={taskIsDone(section, task)}
-										onchange={(event) => toggleTask(section, task, event.currentTarget.checked)}
-									/>
 									<span class="min-w-0 flex-1">
 										<span class="block font-medium text-surface-50">{task.title}</span>
 										{#if task.notes}
@@ -462,7 +461,7 @@
 											</span>
 										{/if}
 									</span>
-								</label>
+								</button>
 							{/if}
 						{/each}
 					{/if}
