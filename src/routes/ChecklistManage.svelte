@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import {
+		ChevronDown,
 		ClipboardList,
 		Copy,
 		DoorOpen,
@@ -15,17 +17,29 @@
 		DIRECT_LINK_PARAM,
 		type AppState,
 		type Checklist,
-		type ChecklistSection,
-		type ChecklistTask,
-		type Frequency,
 		countTasks,
 		exportPortableChecklist,
 		importPortableChecklists,
-		linkKeyConflict,
-		normalizeSchedule
+		linkKeyConflict
 	} from '$lib/checklists';
-	import { alignDateToWeekday, todayUtc } from '$lib/date-time';
-	import { createId } from '$lib/id';
+
+	type TemplateModule = { default: unknown };
+	type ChecklistTemplate = {
+		id: string;
+		name: string;
+		source: unknown;
+	};
+
+	const templateModules = import.meta.glob('../lib/checklists/templates/*.json', {
+		eager: true
+	}) as Record<string, TemplateModule>;
+	const checklistTemplates: ChecklistTemplate[] = Object.entries(templateModules)
+		.map(([path, module]) => ({
+			id: path,
+			name: templateName(module.default, path),
+			source: module.default
+		}))
+		.sort((left, right) => left.name.localeCompare(right.name));
 
 	let {
 		appState = $bindable<AppState>(),
@@ -117,76 +131,31 @@
 		onPersist();
 	}
 
-	function addStarterTemplate(): void {
-		const checklist: Checklist = {
-			id: createId(),
-			name: 'NTE Recurring Checklist',
-			description: 'Daily, weekly, and bi-weekly operating checks with UTC reset windows.',
-			linkKey: 'NTE',
-			sections: [
-				createSection('Daily', 'daily', [
-					'Review open exceptions',
-					'Confirm required reports were generated',
-					'Record follow-ups for blocked items'
-				]),
-				createSection('Weekly', 'weekly', [
-					'Audit recurring checklist coverage',
-					'Review aged unresolved items',
-					'Update weekly summary'
-				]),
-				createSection('Bi-Weekly', 'biweekly', [
-					'Review process drift',
-					'Refresh escalation owners',
-					'Validate bi-weekly reporting inputs'
-				])
-			]
-		};
+	function addTemplateById(templateId: string): void {
+		importFeedback = '';
+		copyFeedback = '';
+		const template = checklistTemplates.find((item) => item.id === templateId);
+		if (!template) return;
 
-		const conflict = linkKeyConflict(appState.checklists, checklist.linkKey);
-		if (conflict) {
-			importFeedback = `The starter template link key is already used by "${conflict.name}".`;
+		const result = importPortableChecklists(JSON.stringify(template.source));
+		if (!result.ok) {
+			importFeedback = result.error;
 			return;
 		}
 
-		appState.checklists = [...appState.checklists, checklist];
+		const conflict = linkKeyConflict(appState.checklists, result.checklist.linkKey);
+		if (conflict) {
+			importFeedback = `Template link key is already used by "${conflict.name}".`;
+			return;
+		}
+
+		appState.checklists = [...appState.checklists, result.checklist];
+		importFeedback = `Added "${result.checklist.name}".`;
 		onPersist();
 	}
 
-	function createSection(
-		name: string,
-		frequency: Frequency,
-		taskTitles: string[] = ['New task']
-	): ChecklistSection {
-		const resetWeekday = frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined;
-		const defaultSchedule = normalizeSchedule(
-			{
-				frequency,
-				resetWeekday,
-				anchorDateTimeUtc:
-					frequency === 'biweekly'
-						? `${alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')}T05:00:00.000Z`
-						: `${todayUtc()}T05:00:00.000Z`
-			},
-			{}
-		) ?? {
-			frequency: 'daily',
-			anchorDateTimeUtc: `${todayUtc()}T05:00:00.000Z`
-		};
-
-		return {
-			id: createId(),
-			name,
-			defaultSchedule,
-			tasks: taskTitles.map((title) => createTask(title))
-		};
-	}
-
-	function createTask(title: string): ChecklistTask {
-		return {
-			id: createId(),
-			title,
-			notes: ''
-		};
+	function addSelectedTemplate(details: { value: string }): void {
+		addTemplateById(details.value);
 	}
 
 	function filenameSlug(value: string): string {
@@ -196,6 +165,27 @@
 				.toLowerCase()
 				.replace(/[^a-z0-9]+/g, '-')
 				.replace(/^-|-$/g, '') || 'checklist'
+		);
+	}
+
+	function templateName(source: unknown, path: string): string {
+		if (
+			typeof source === 'object' &&
+			source !== null &&
+			'checklist' in source &&
+			typeof source.checklist === 'object' &&
+			source.checklist !== null &&
+			'name' in source.checklist &&
+			typeof source.checklist.name === 'string'
+		) {
+			return source.checklist.name;
+		}
+
+		return (
+			path
+				.split('/')
+				.pop()
+				?.replace(/\.json$/i, '') ?? 'Template'
 		);
 	}
 </script>
@@ -223,10 +213,31 @@
 				<Upload size={18} aria-hidden="true" />
 				Import
 			</button>
-			<button class="btn preset-tonal-surface" type="button" onclick={addStarterTemplate}>
-				<RotateCcw size={18} aria-hidden="true" />
-				NTE Template
-			</button>
+			<Menu onSelect={addSelectedTemplate} positioning={{ placement: 'bottom-end' }}>
+				<Menu.Trigger
+					class="btn preset-tonal-surface"
+					type="button"
+					disabled={checklistTemplates.length === 0}
+				>
+					<RotateCcw size={18} aria-hidden="true" />
+					Add Template
+					<ChevronDown size={16} aria-hidden="true" />
+				</Menu.Trigger>
+				<Portal>
+					<Menu.Positioner>
+						<Menu.Content class="min-w-56">
+							<Menu.ItemGroup>
+								<Menu.ItemGroupLabel>Templates</Menu.ItemGroupLabel>
+								{#each checklistTemplates as template (template.id)}
+									<Menu.Item value={template.id}>
+										<Menu.ItemText>{template.name}</Menu.ItemText>
+									</Menu.Item>
+								{/each}
+							</Menu.ItemGroup>
+						</Menu.Content>
+					</Menu.Positioner>
+				</Portal>
+			</Menu>
 			<button class="btn preset-filled-primary-500" type="button" onclick={createChecklist}>
 				<Plus size={18} aria-hidden="true" />
 				Create new Checklist
@@ -251,8 +262,7 @@
 					<ClipboardList class="mx-auto mb-4 text-surface-400" size={36} aria-hidden="true" />
 					<h2 class="text-xl font-semibold text-surface-50">No checklists yet</h2>
 					<p class="mx-auto mt-2 max-w-xl text-sm text-surface-400">
-						Create a checklist from scratch or add the NTE template to start with daily, weekly, and
-						bi-weekly reset sections.
+						Create a checklist from scratch or add a template to start with a predefined structure.
 					</p>
 				</div>
 			{:else}
