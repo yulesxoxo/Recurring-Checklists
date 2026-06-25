@@ -4,6 +4,7 @@
 	import { ArrowDown, ArrowUp, ChevronDown, Plus, Save, Trash2 } from '@lucide/svelte';
 	import { Accordion } from '@skeletonlabs/skeleton-svelte';
 	import { onMount } from 'svelte';
+	import ChecklistNotFound from '../ChecklistNotFound.svelte';
 	import {
 		DIRECT_LINK_PARAM,
 		type Checklist,
@@ -546,15 +547,10 @@
 	{/if}
 {/snippet}
 
-<section class="rounded-container border border-surface-800 bg-surface-900 p-5 shadow-sm">
-	{#if checklistNotFound}
-		<div class="p-3 text-center">
-			<h2 class="text-xl font-semibold text-surface-50">Checklist not found</h2>
-			<p class="mt-2 text-sm text-surface-400">
-				Return to manage mode and choose an available checklist.
-			</p>
-		</div>
-	{:else}
+{#if checklistNotFound}
+	<ChecklistNotFound />
+{:else}
+	<section class="rounded-container border border-surface-800 bg-surface-900 p-5 shadow-sm">
 		<form
 			class="flex flex-col gap-5"
 			onsubmit={(event) => {
@@ -790,5 +786,5 @@
 				</button>
 			</div>
 		</form>
-	{/if}
-</section>
+	</section>
+{/if}

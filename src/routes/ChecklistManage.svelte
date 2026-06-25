@@ -43,11 +43,9 @@
 
 	let {
 		appState = $bindable<AppState>(),
-		onPersist,
-		onEnterChecklist
+		onPersist
 	}: {
 		appState: AppState;
-		onEnterChecklist: (checklist: Checklist) => void;
 		onPersist: () => void;
 	} = $props();
 
@@ -57,7 +55,8 @@
 
 	function checklistUrl(checklist: Checklist): string {
 		const url = new URL(window.location.href);
-		url.pathname = '/';
+		url.pathname = '/view/';
+		url.search = '';
 		url.searchParams.set(DIRECT_LINK_PARAM, checklist.linkKey || checklist.id);
 
 		const search = url.searchParams.toString();
@@ -117,6 +116,12 @@
 
 	function editChecklist(checklist: Checklist): void {
 		void goto(`/create?edit=${encodeURIComponent(checklist.id)}`);
+	}
+
+	function openChecklist(checklist: Checklist): void {
+		void goto(
+			`/view/?${DIRECT_LINK_PARAM}=${encodeURIComponent(checklist.linkKey || checklist.id)}`
+		);
 	}
 
 	function deleteChecklist(checklist: Checklist): void {
@@ -190,7 +195,7 @@
 	}
 </script>
 
-<section class="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+<section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
 	<header
 		class="flex flex-col gap-4 border-b border-surface-800 pb-5 md:flex-row md:items-end md:justify-between"
 	>
@@ -302,7 +307,7 @@
 									<button
 										class="btn btn-sm preset-filled-primary-500"
 										type="button"
-										onclick={() => onEnterChecklist(checklist)}
+										onclick={() => openChecklist(checklist)}
 									>
 										<DoorOpen size={16} aria-hidden="true" />
 										Enter

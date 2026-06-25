@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ArrowLeft, CheckCircle2 } from '@lucide/svelte';
+	import { CheckCircle2 } from '@lucide/svelte';
 	import {
 		type AppState,
 		type Checklist,
@@ -23,13 +23,11 @@
 		appState = $bindable<AppState>(),
 		checklist,
 		now = $bindable<Date>(),
-		onBack,
 		onPersist
 	}: {
 		appState: AppState;
 		checklist: Checklist;
 		now: Date;
-		onBack: () => void;
 		onPersist: () => void;
 	} = $props();
 
@@ -136,22 +134,10 @@
 	}
 </script>
 
-<section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-	<header class="border-b border-surface-800 pb-5">
-		<button class="btn preset-tonal-surface mb-4" type="button" onclick={onBack}>
-			<ArrowLeft size={18} aria-hidden="true" />
-			Back to Manage
-		</button>
-		<div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-			<div class="min-w-0">
-				<h1 class="text-3xl font-semibold text-surface-50">{checklist.name}</h1>
-				<p class="mt-2 text-sm text-surface-400">
-					{checklist.description || 'No description'}
-				</p>
-			</div>
-			<span class="badge preset-tonal-primary">{countTasks(checklist)} tasks</span>
-		</div>
-	</header>
+<div class="grid gap-6">
+	<div class="flex justify-end">
+		<span class="badge preset-tonal-primary">{countTasks(checklist)} tasks</span>
+	</div>
 
 	<div class="grid gap-5">
 		{#each checklist.sections as section (section.id)}
@@ -229,4 +215,4 @@
 			</section>
 		{/each}
 	</div>
-</section>
+</div>
