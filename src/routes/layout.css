@@ -12,6 +12,7 @@ html {
 	color-scheme: dark;
 	background: var(--color-surface-950);
 	color: var(--color-surface-50);
+	scrollbar-gutter: stable;
 }
 
 body {
@@ -19,4 +20,10 @@ body {
 	min-width: 320px;
 	min-height: 100vh;
 	background: var(--color-surface-950);
+}
+
+@supports not (scrollbar-gutter: stable) {
+	html {
+		overflow-y: scroll;
+	}
 }

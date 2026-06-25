@@ -13,6 +13,7 @@
 		Trash2,
 		Upload
 	} from '@lucide/svelte';
+	import PageHeader from './PageHeader.svelte';
 	import {
 		DIRECT_LINK_PARAM,
 		type AppState,
@@ -195,60 +196,58 @@
 	}
 </script>
 
+{#snippet headerActions()}
+	<div class="flex flex-col gap-2 sm:flex-row">
+		<input
+			bind:this={importInput}
+			class="hidden"
+			type="file"
+			accept="application/json,.json"
+			onchange={importDefinitions}
+		/>
+		<button class="btn preset-tonal-surface" type="button" onclick={openImportPicker}>
+			<Upload size={18} aria-hidden="true" />
+			Import
+		</button>
+		<Menu onSelect={addSelectedTemplate} positioning={{ placement: 'bottom-end' }}>
+			<Menu.Trigger
+				class="btn preset-tonal-surface"
+				type="button"
+				disabled={checklistTemplates.length === 0}
+			>
+				<RotateCcw size={18} aria-hidden="true" />
+				Add Template
+				<ChevronDown size={16} aria-hidden="true" />
+			</Menu.Trigger>
+			<Portal>
+				<Menu.Positioner>
+					<Menu.Content class="min-w-56">
+						<Menu.ItemGroup>
+							<Menu.ItemGroupLabel>Templates</Menu.ItemGroupLabel>
+							{#each checklistTemplates as template (template.id)}
+								<Menu.Item value={template.id}>
+									<Menu.ItemText>{template.name}</Menu.ItemText>
+								</Menu.Item>
+							{/each}
+						</Menu.ItemGroup>
+					</Menu.Content>
+				</Menu.Positioner>
+			</Portal>
+		</Menu>
+		<button class="btn preset-filled-primary-500" type="button" onclick={createChecklist}>
+			<Plus size={18} aria-hidden="true" />
+			Create new Checklist
+		</button>
+	</div>
+{/snippet}
+
 <section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-	<header
-		class="flex flex-col gap-4 border-b border-surface-800 pb-5 md:flex-row md:items-end md:justify-between"
-	>
-		<div class="min-w-0">
-			<div class="mb-2 flex items-center gap-2 text-sm font-medium text-surface-400">
-				<ClipboardList size={18} aria-hidden="true" />
-				<span>{appState.checklists.length} checklists</span>
-			</div>
-			<h1 class="text-3xl font-semibold tracking-normal text-surface-50">Manage Checklists</h1>
-		</div>
-		<div class="flex flex-col gap-2 sm:flex-row">
-			<input
-				bind:this={importInput}
-				class="hidden"
-				type="file"
-				accept="application/json,.json"
-				onchange={importDefinitions}
-			/>
-			<button class="btn preset-tonal-surface" type="button" onclick={openImportPicker}>
-				<Upload size={18} aria-hidden="true" />
-				Import
-			</button>
-			<Menu onSelect={addSelectedTemplate} positioning={{ placement: 'bottom-end' }}>
-				<Menu.Trigger
-					class="btn preset-tonal-surface"
-					type="button"
-					disabled={checklistTemplates.length === 0}
-				>
-					<RotateCcw size={18} aria-hidden="true" />
-					Add Template
-					<ChevronDown size={16} aria-hidden="true" />
-				</Menu.Trigger>
-				<Portal>
-					<Menu.Positioner>
-						<Menu.Content class="min-w-56">
-							<Menu.ItemGroup>
-								<Menu.ItemGroupLabel>Templates</Menu.ItemGroupLabel>
-								{#each checklistTemplates as template (template.id)}
-									<Menu.Item value={template.id}>
-										<Menu.ItemText>{template.name}</Menu.ItemText>
-									</Menu.Item>
-								{/each}
-							</Menu.ItemGroup>
-						</Menu.Content>
-					</Menu.Positioner>
-				</Portal>
-			</Menu>
-			<button class="btn preset-filled-primary-500" type="button" onclick={createChecklist}>
-				<Plus size={18} aria-hidden="true" />
-				Create new Checklist
-			</button>
-		</div>
-	</header>
+	<PageHeader
+		title="Manage Checklists"
+		description="Create, import, export, and open recurring checklists."
+		showBack={false}
+		trail={headerActions}
+	/>
 
 	{#if importFeedback || copyFeedback}
 		<p

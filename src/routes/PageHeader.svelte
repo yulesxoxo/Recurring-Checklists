@@ -7,12 +7,16 @@
 		title,
 		description,
 		backHref = '/',
-		backLabel = 'Back to Manage'
+		backLabel = 'Back to Manage',
+		showBack = true,
+		trail
 	}: {
 		title: string;
 		description: string;
 		backHref?: string;
 		backLabel?: string;
+		showBack?: boolean;
+		trail?: import('svelte').Snippet;
 	} = $props();
 
 	function goBack(): void {
@@ -27,12 +31,19 @@
 				<h1 class="text-3xl font-semibold tracking-normal text-surface-50">{title}</h1>
 				<p class="mt-1 text-sm text-surface-400">{description}</p>
 			</AppBar.Headline>
-			<AppBar.Trail class="justify-start md:justify-end">
-				<button class="btn preset-tonal-surface" type="button" onclick={goBack}>
-					<ArrowLeft size={18} aria-hidden="true" />
-					{backLabel}
-				</button>
-			</AppBar.Trail>
+			{#if showBack || trail}
+				<AppBar.Trail class="justify-start md:justify-end">
+					{#if trail}
+						{@render trail()}
+					{/if}
+					{#if showBack}
+						<button class="btn preset-tonal-surface" type="button" onclick={goBack}>
+							<ArrowLeft size={18} aria-hidden="true" />
+							{backLabel}
+						</button>
+					{/if}
+				</AppBar.Trail>
+			{/if}
 		</AppBar.Toolbar>
 	</AppBar>
 </header>
