@@ -27,7 +27,8 @@ export function normalizeSchedule(
 	value: unknown,
 	options: ChecklistParseOptions = {}
 ): RecurringSchedule | null {
-	if (!isRecord(value) || !isFrequency(value.frequency, options)) return null;
+	void options;
+	if (!isRecord(value) || !isFrequency(value.frequency)) return null;
 
 	const frequency = value.frequency;
 	const resetTimeUtc = legacyResetTime(value);
@@ -207,7 +208,7 @@ function normalizePortableSchedule(
 	value: unknown,
 	options: ChecklistParseOptions
 ): RecurringSchedule | null {
-	if (!isRecord(value) || !isFrequency(value.frequency, options)) return null;
+	if (!isRecord(value) || !isFrequency(value.frequency)) return null;
 	const hasValidAnchorDateTime =
 		typeof value.anchorDateTimeUtc === 'string' && parseUtcDateTimeInput(value.anchorDateTimeUtc);
 	const hasValidLegacyResetTime =
@@ -263,7 +264,7 @@ function normalizePortableSchedule(
 	return normalizeSchedule(value, options);
 }
 
-function isFrequency(value: unknown, options: ChecklistParseOptions): value is Frequency {
+function isFrequency(value: unknown): value is Frequency {
 	return value === 'daily' || value === 'weekly' || value === 'biweekly' || value === 'interval';
 }
 

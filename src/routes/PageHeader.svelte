@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import type { PathnameWithSearchOrHash } from '$app/types';
 	import { AppBar } from '@skeletonlabs/skeleton-svelte';
 	import { ArrowLeft } from '@lucide/svelte';
 
@@ -13,14 +15,14 @@
 	}: {
 		title: string;
 		description: string;
-		backHref?: string;
+		backHref?: PathnameWithSearchOrHash;
 		backLabel?: string;
 		showBack?: boolean;
 		trail?: import('svelte').Snippet;
 	} = $props();
 
 	function goBack(): void {
-		void goto(backHref);
+		void goto(resolve(backHref));
 	}
 </script>
 

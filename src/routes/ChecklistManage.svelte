@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import {
 		ChevronDown,
@@ -13,6 +14,7 @@
 		Trash2,
 		Upload
 	} from '@lucide/svelte';
+	import { SvelteURL } from 'svelte/reactivity';
 	import PageHeader from './PageHeader.svelte';
 	import {
 		DIRECT_LINK_PARAM,
@@ -55,7 +57,7 @@
 	let copyFeedback = $state('');
 
 	function checklistUrl(checklist: Checklist): string {
-		const url = new URL(window.location.href);
+		const url = new SvelteURL(window.location.href);
 		url.pathname = '/view/';
 		url.search = '';
 		url.searchParams.set(DIRECT_LINK_PARAM, checklist.linkKey || checklist.id);
@@ -112,16 +114,18 @@
 	}
 
 	function createChecklist(): void {
-		void goto('/create');
+		void goto(resolve('/create'));
 	}
 
 	function editChecklist(checklist: Checklist): void {
-		void goto(`/create?edit=${encodeURIComponent(checklist.id)}`);
+		void goto(resolve(`/create?edit=${encodeURIComponent(checklist.id)}`));
 	}
 
 	function openChecklist(checklist: Checklist): void {
 		void goto(
-			`/view/?${DIRECT_LINK_PARAM}=${encodeURIComponent(checklist.linkKey || checklist.id)}`
+			resolve(
+				`/view/?${DIRECT_LINK_PARAM}=${encodeURIComponent(checklist.linkKey || checklist.id)}`
+			)
 		);
 	}
 

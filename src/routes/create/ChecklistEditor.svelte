@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { ArrowDown, ArrowUp, ChevronDown, Plus, Save, Trash2 } from '@lucide/svelte';
 	import { Accordion } from '@skeletonlabs/skeleton-svelte';
@@ -129,7 +130,7 @@
 		}
 
 		saveAppState(localStorage, appState);
-		void goto('/', { replaceState: true });
+		void goto(resolve('/'), { replaceState: true });
 	}
 
 	function addSection(position: number | undefined = undefined): void {
@@ -412,7 +413,7 @@
 				value={schedule.frequency}
 				onchange={(event) => updateFrequency(schedule, event.currentTarget.value as Frequency)}
 			>
-				{#each frequencies as frequency}
+				{#each frequencies as frequency (frequency)}
 					<option value={frequency}>{titleCase(frequency)}</option>
 				{/each}
 			</select>
@@ -529,7 +530,7 @@
 					value={schedule.resetWeekday}
 					onchange={(event) => updateResetWeekday(schedule, event.currentTarget.value as Weekday)}
 				>
-					{#each weekdays as weekday}
+					{#each weekdays as weekday (weekday)}
 						<option value={weekday}>{titleCase(weekday)}</option>
 					{/each}
 				</select>
