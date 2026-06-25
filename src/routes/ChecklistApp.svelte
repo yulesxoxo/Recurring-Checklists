@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { Progress } from '@skeletonlabs/skeleton-svelte';
 	import { ArrowLeft } from '@lucide/svelte';
 	import ChecklistManage from './ChecklistManage.svelte';
 	import ChecklistView from './ChecklistView.svelte';
@@ -17,7 +18,7 @@
 	let appState = $state<AppState>(createEmptyAppState());
 	let mode = $state<Mode>('manage');
 	let selectedChecklistId = $state<string | null>(null);
-	let mounted = false;
+	let mounted = $state(false);
 	let now = $state(new Date());
 
 	let selectedChecklist = $derived(
@@ -137,7 +138,16 @@
 </svelte:head>
 
 <main class="min-h-screen bg-surface-950 text-surface-50">
-	{#if mode === 'manage'}
+	{#if !mounted}
+		<section class="flex min-h-screen items-center justify-center px-4 py-10">
+			<Progress class="w-fit" value={null} aria-label="Loading checklists">
+				<Progress.Circle class="[--size:--spacing(16)]">
+					<Progress.CircleTrack />
+					<Progress.CircleRange />
+				</Progress.Circle>
+			</Progress>
+		</section>
+	{:else if mode === 'manage'}
 		<ChecklistManage bind:appState onPersist={persist} onEnterChecklist={enterChecklist} />
 	{:else if selectedChecklist}
 		<ChecklistView
