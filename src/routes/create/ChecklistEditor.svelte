@@ -170,6 +170,7 @@
 
 	function replaceSchedule(schedule: RecurringSchedule, next: RecurringSchedule): void {
 		delete schedule.resetWeekday;
+		delete schedule.availableWeekdays;
 		delete schedule.anchorDateTimeUtc;
 		delete schedule.intervalMinutes;
 		delete schedule.intervalMode;
@@ -183,6 +184,7 @@
 					...schedule,
 					frequency,
 					resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
+					availableWeekdays: frequency === 'daily' ? schedule.availableWeekdays : undefined,
 					anchorDateTimeUtc:
 						frequency === 'biweekly'
 							? (schedule.anchorDateTimeUtc ?? `${todayUtc()}T05:00:00.000Z`)
@@ -206,6 +208,23 @@
 				scheduleResetTimeUtc(schedule),
 				resetWeekday
 			);
+		}
+	}
+
+	function updateAvailableWeekday(
+		schedule: RecurringSchedule,
+		weekday: Weekday,
+		available: boolean
+	): void {
+		const current = schedule.availableWeekdays ?? weekdays;
+		const next = available
+			? weekdays.filter((value) => value === weekday || current.includes(value))
+			: current.filter((value) => value !== weekday);
+
+		if (next.length > 0 && next.length < weekdays.length) {
+			schedule.availableWeekdays = next;
+		} else {
+			delete schedule.availableWeekdays;
 		}
 	}
 
@@ -582,6 +601,27 @@
 					<span class="text-xs text-surface-400">Only the selected reset weekday is valid.</span>
 				</div>
 			{/if}
+		</div>
+	{/if}
+
+	{#if schedule.frequency === 'daily'}
+		<div class="mt-3 rounded-base border border-surface-800 bg-surface-900 p-3">
+			<div class="text-sm font-semibold text-surface-300">Available days</div>
+			<div class="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+				{#each weekdays as weekday (weekday)}
+					<label class="flex items-center gap-2 text-sm text-surface-300">
+						<input
+							class="checkbox"
+							type="checkbox"
+							checked={!schedule.availableWeekdays?.length ||
+								schedule.availableWeekdays.includes(weekday)}
+							onchange={(event) =>
+								updateAvailableWeekday(schedule, weekday, event.currentTarget.checked)}
+						/>
+						<span>{titleCase(weekday)}</span>
+					</label>
+				{/each}
+			</div>
 		</div>
 	{/if}
 

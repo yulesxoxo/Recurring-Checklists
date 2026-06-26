@@ -10,6 +10,7 @@ import {
 	todayUtc
 } from '../date-time';
 import { createId } from '../id';
+import { weekdays } from './constants';
 import type {
 	Checklist,
 	ChecklistParseOptions,
@@ -38,11 +39,14 @@ export function normalizeSchedule(
 				? value.resetWeekday
 				: 'monday'
 			: undefined;
+	const availableWeekdays =
+		frequency === 'daily' ? normalizeAvailableWeekdays(value.availableWeekdays) : undefined;
 	const intervalMode = value.intervalMode === 'completion' ? 'completion' : 'anchor';
 
 	return {
 		frequency,
 		resetWeekday,
+		availableWeekdays,
 		anchorDateTimeUtc: normalizeScheduleAnchorDateTime(
 			value,
 			frequency,
@@ -237,6 +241,12 @@ function normalizePortableSchedule(
 		if (value.resetWeekday !== undefined && !isWeekday(value.resetWeekday)) return null;
 	}
 
+	if (value.availableWeekdays !== undefined) {
+		if (value.frequency !== 'daily' || !isValidAvailableWeekdays(value.availableWeekdays)) {
+			return null;
+		}
+	}
+
 	if (value.resetTimeUtc !== undefined && !hasValidLegacyResetTime) return null;
 
 	if (
@@ -297,6 +307,19 @@ function isWeekday(value: unknown): value is Weekday {
 		value === 'friday' ||
 		value === 'saturday'
 	);
+}
+
+function normalizeAvailableWeekdays(value: unknown): Weekday[] | undefined {
+	if (!Array.isArray(value)) return undefined;
+
+	const selected = new Set(value.filter(isWeekday));
+	const unique = weekdays.filter((weekday) => selected.has(weekday));
+
+	return unique.length > 0 && unique.length < 7 ? unique : undefined;
+}
+
+function isValidAvailableWeekdays(value: unknown): boolean {
+	return Array.isArray(value) && value.every(isWeekday);
 }
 
 function normalizeBiweeklyAnchorDateTime(

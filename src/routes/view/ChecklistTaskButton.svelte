@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { appState } from '$lib/appState.svelte';
+	import { weekdays } from '$lib/checklists';
 	import type {
 		ChecklistSection,
 		ChecklistTask,
@@ -7,11 +8,13 @@
 		RecurringSchedule
 	} from '$lib/checklists';
 	import {
+		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
 		getNextReset,
 		getResetWindowStart,
 		intervalCompletionExpiresAt,
+		isScheduleAvailable,
 		scheduleResetTimeUtc,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
@@ -38,6 +41,7 @@
 
 	let schedule = $derived(task.schedule ?? section.defaultSchedule);
 	let completion = $derived(appState.completions[checklistId]?.[section.id]?.[task.id]);
+	let isAvailable = $derived(isScheduleAvailable(schedule, now));
 	let isDone = $derived(taskIsDone());
 	let rowClass = $derived(taskRowClass());
 	let countLabel = $derived(taskUsesUnitControls() ? taskUnitStatus() : undefined);
@@ -46,6 +50,7 @@
 
 	function toggleTask(event: MouseEvent): void {
 		event.preventDefault();
+		if (!isAvailable) return;
 
 		if (taskUsesUnitControls()) {
 			toggleTaskUnit();
@@ -123,6 +128,10 @@
 	}
 
 	function taskRowClass(): string {
+		if (!isAvailable) {
+			return 'cursor-not-allowed border-surface-800 bg-surface-900 opacity-50 hover:bg-surface-900';
+		}
+
 		return isDone && !hideCompleted
 			? 'border-surface-800 bg-surface-900 opacity-60 hover:bg-surface-900'
 			: 'border-surface-800 bg-surface-950 hover:bg-surface-800';
@@ -208,7 +217,7 @@
 			};
 		}
 
-		const elapsedWindows = countResetWindowsSince(lastAccruedAt, windowStart);
+		const elapsedWindows = countAvailableResetWindowsSince(schedule, lastAccruedAt, windowStart);
 		available = Math.min(capacity, available + elapsedWindows * repeatCount);
 
 		return {
@@ -216,20 +225,6 @@
 			capacity,
 			lastAccruedAt: windowStart.toISOString()
 		};
-	}
-
-	function countResetWindowsSince(lastAccruedAtValue: string, currentWindowStart: Date): number {
-		const lastAccruedAt = new Date(lastAccruedAtValue);
-		if (Number.isNaN(lastAccruedAt.getTime())) return 0;
-
-		let count = 0;
-		let cursor = getNextReset(schedule, lastAccruedAt);
-		while (cursor && cursor <= currentWindowStart && count < 10000) {
-			count += 1;
-			cursor = getNextReset(schedule, new Date(cursor.getTime() + 1));
-		}
-
-		return count;
 	}
 
 	function bankedCompletionCount(
@@ -286,7 +281,7 @@
 
 		switch (scheduleValue.frequency) {
 			case 'daily':
-				return `Resets daily at ${resetTime}`;
+				return `${describeDailyAvailability(scheduleValue)} at ${resetTime}`;
 			case 'weekly':
 				return `Resets every ${titleCase(scheduleValue.resetWeekday ?? 'monday')} at ${resetTime}`;
 			case 'biweekly':
@@ -297,11 +292,27 @@
 	function titleCase(value: string): string {
 		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 	}
+
+	function describeDailyAvailability(scheduleValue: RecurringSchedule): string {
+		if (!scheduleValue.availableWeekdays?.length) return 'Resets daily';
+
+		return `Available ${formatWeekdayList(scheduleValue.availableWeekdays)}; resets`;
+	}
+
+	function formatWeekdayList(values: string[]): string {
+		const selected = new Set(values);
+		const labels = weekdays.filter((weekday) => selected.has(weekday)).map(titleCase);
+		if (labels.length === 1) return labels[0];
+		if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+
+		return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+	}
 </script>
 
 <button
 	type="button"
 	class={`flex w-full cursor-pointer select-none gap-3 rounded-base border p-3 text-left transition ${rowClass}`}
+	disabled={!isAvailable}
 	onclick={toggleTask}
 >
 	<span class="min-w-0 flex-1">
@@ -316,6 +327,9 @@
 		{/if}
 		{#if customScheduleDisplay}
 			<span class="mt-2 block text-xs text-surface-400">{customScheduleDisplay}</span>
+		{/if}
+		{#if !isAvailable}
+			<span class="mt-2 block text-xs text-surface-400">Not available today</span>
 		{/if}
 		{#if resetDisplay}
 			<span class="mt-1 block text-xs text-surface-400">{resetDisplay}</span>

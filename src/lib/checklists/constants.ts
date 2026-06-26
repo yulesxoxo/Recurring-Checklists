@@ -6,11 +6,11 @@ export const DIRECT_LINK_PARAM = 'link';
 export const productionFrequencies: BaseFrequency[] = ['daily', 'weekly', 'biweekly', 'interval'];
 export const allFrequencies: Frequency[] = [...productionFrequencies];
 export const weekdays: Weekday[] = [
-	'sunday',
 	'monday',
 	'tuesday',
 	'wednesday',
 	'thursday',
 	'friday',
-	'saturday'
+	'saturday',
+	'sunday'
 ];

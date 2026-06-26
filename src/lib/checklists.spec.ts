@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { AppState, RecurringSchedule } from './checklists';
 import {
+	countAvailableResetWindowsSince,
+	describeSchedule,
 	getNextReset,
 	getResetWindowStart,
 	intervalCompletionExpiresAt,
+	isScheduleAvailable,
 	localTimeToUtcTime,
 	scheduleInputTimeToUtc
 } from './date-time';
@@ -164,6 +167,48 @@ describe('reset windows', () => {
 		);
 	});
 
+	it('marks restricted daily schedules available only on selected local weekdays', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'daily',
+			anchorDateTimeUtc: '2026-06-24T12:00:00.000Z',
+			availableWeekdays: ['friday', 'saturday', 'sunday']
+		};
+
+		expect(isScheduleAvailable(schedule, new Date(2026, 5, 26, 12))).toBe(true);
+		expect(isScheduleAvailable(schedule, new Date(2026, 5, 29, 12))).toBe(false);
+	});
+
+	it('uses selected weekdays for restricted daily reset boundaries', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'daily',
+			anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
+			availableWeekdays: ['monday']
+		};
+
+		expect(getResetWindowStart(schedule, new Date('2026-06-26T10:00:00.000Z'))?.toISOString()).toBe(
+			'2026-06-22T07:00:00.000Z'
+		);
+		expect(getNextReset(schedule, new Date('2026-06-26T10:00:00.000Z'))?.toISOString()).toBe(
+			'2026-06-29T07:00:00.000Z'
+		);
+	});
+
+	it('counts reset windows only on selected daily weekdays', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'daily',
+			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+			availableWeekdays: ['friday', 'saturday', 'sunday']
+		};
+
+		expect(
+			countAvailableResetWindowsSince(
+				schedule,
+				'2026-06-26T12:00:00.000Z',
+				new Date('2026-07-03T12:00:00.000Z')
+			)
+		).toBe(3);
+	});
+
 	it('uses Monday at 05:00 UTC as the weekly boundary', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'weekly',
@@ -274,6 +319,7 @@ describe('schedule normalization', () => {
 		expect(schedule).toEqual({
 			frequency: 'biweekly',
 			resetWeekday: 'monday',
+			availableWeekdays: undefined,
 			anchorDateTimeUtc: '2026-06-22T09:30:00.000Z',
 			intervalMinutes: undefined,
 			intervalMode: undefined
@@ -292,10 +338,49 @@ describe('schedule normalization', () => {
 		expect(schedule).toEqual({
 			frequency: 'interval',
 			resetWeekday: undefined,
+			availableWeekdays: undefined,
 			anchorDateTimeUtc: undefined,
 			intervalMinutes: 135,
 			intervalMode: 'completion'
 		});
+	});
+
+	it('normalizes daily availability to unique weekdays only', () => {
+		const schedule = normalizeSchedule({
+			frequency: 'daily',
+			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+			availableWeekdays: ['sunday', 'monday', 'friday', 'saturday', 'friday']
+		});
+
+		expect(schedule?.availableWeekdays).toEqual(['monday', 'friday', 'saturday', 'sunday']);
+	});
+
+	it('describes daily availability in Monday-first order', () => {
+		expect(
+			describeSchedule({
+				frequency: 'daily',
+				anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
+				availableWeekdays: ['sunday', 'monday', 'friday', 'saturday']
+			})
+		).toBe('Available Monday, Friday, Saturday, and Sunday; resets at 07:00 UTC');
+	});
+
+	it('ignores availability when every daily weekday is selected', () => {
+		const schedule = normalizeSchedule({
+			frequency: 'daily',
+			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+			availableWeekdays: [
+				'sunday',
+				'monday',
+				'tuesday',
+				'wednesday',
+				'thursday',
+				'friday',
+				'saturday'
+			]
+		});
+
+		expect(schedule?.availableWeekdays).toBeUndefined();
 	});
 });
 
@@ -434,6 +519,32 @@ describe('portable exports', () => {
 			maxCarryover: 6
 		});
 	});
+
+	it('includes daily availability on portable schedules', () => {
+		const exported = exportPortableChecklist({
+			id: 'checklist-1',
+			name: 'Operations',
+			description: '',
+			sections: [
+				{
+					id: 'section-1',
+					name: 'Weekend',
+					defaultSchedule: {
+						frequency: 'daily',
+						anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+						availableWeekdays: ['friday', 'saturday', 'sunday']
+					},
+					tasks: []
+				}
+			]
+		});
+
+		expect(exported.checklist.sections[0].defaultSchedule.availableWeekdays).toEqual([
+			'friday',
+			'saturday',
+			'sunday'
+		]);
+	});
 });
 
 describe('portable imports', () => {
@@ -533,6 +644,37 @@ describe('portable imports', () => {
 		});
 	});
 
+	it('imports daily availability', () => {
+		const result = importPortableChecklists(
+			JSON.stringify({
+				version: 1,
+				checklist: {
+					name: 'Operations',
+					description: '',
+					sections: [
+						{
+							name: 'Weekend',
+							defaultSchedule: {
+								frequency: 'daily',
+								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+								availableWeekdays: ['friday', 'saturday', 'sunday']
+							},
+							tasks: []
+						}
+					]
+				}
+			})
+		);
+
+		expect(result.ok).toBe(true);
+		if (!result.ok) return;
+		expect(result.checklist.sections[0].defaultSchedule.availableWeekdays).toEqual([
+			'friday',
+			'saturday',
+			'sunday'
+		]);
+	});
+
 	it('rejects malformed schedules before import', () => {
 		const result = importPortableChecklists(
 			JSON.stringify({
@@ -544,6 +686,31 @@ describe('portable imports', () => {
 						{
 							name: 'Bad',
 							defaultSchedule: { frequency: 'daily', anchorDateTimeUtc: 'bad' },
+							tasks: []
+						}
+					]
+				}
+			})
+		);
+
+		expect(result.ok).toBe(false);
+	});
+
+	it('rejects malformed daily availability before import', () => {
+		const result = importPortableChecklists(
+			JSON.stringify({
+				version: 1,
+				checklist: {
+					name: 'Operations',
+					description: '',
+					sections: [
+						{
+							name: 'Bad',
+							defaultSchedule: {
+								frequency: 'daily',
+								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+								availableWeekdays: ['friday', 'funday']
+							},
 							tasks: []
 						}
 					]

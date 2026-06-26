@@ -9,14 +9,17 @@
 		type ChecklistTask,
 		type CompletionRecord,
 		type RecurringSchedule,
-		countTasks
+		countTasks,
+		weekdays
 	} from '$lib/checklists';
 	import {
+		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
 		getNextReset,
 		getResetWindowStart,
 		intervalCompletionExpiresAt,
+		isScheduleAvailable,
 		scheduleResetTimeUtc,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
@@ -56,16 +59,25 @@
 	}
 
 	function sectionProgress(section: ChecklistSection): { done: number; total: number } {
+		const tasks = availableTasks(section);
 		return {
-			done: section.tasks.filter((task) => taskIsDone(section, task)).length,
-			total: section.tasks.length
+			done: tasks.filter((task) => taskIsDone(section, task)).length,
+			total: tasks.length
 		};
 	}
 
 	function visibleTasks(section: ChecklistSection): ChecklistTask[] {
 		return hideCompletedTasks
-			? section.tasks.filter((task) => !taskIsDone(section, task))
+			? availableTasks(section).filter((task) => !taskIsDone(section, task))
 			: section.tasks;
+	}
+
+	function availableTasks(section: ChecklistSection): ChecklistTask[] {
+		return section.tasks.filter((task) => taskIsAvailable(section, task));
+	}
+
+	function taskIsAvailable(section: ChecklistSection, task: ChecklistTask): boolean {
+		return isScheduleAvailable(effectiveTaskSchedule(section, task), now);
 	}
 
 	function effectiveTaskSchedule(
@@ -84,7 +96,7 @@
 
 		switch (schedule.frequency) {
 			case 'daily':
-				return `Resets daily at ${resetTime}`;
+				return `${describeDailyAvailability(schedule)} at ${resetTime}`;
 			case 'weekly':
 				return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
 			case 'biweekly':
@@ -94,6 +106,21 @@
 
 	function titleCase(value: string): string {
 		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
+	}
+
+	function describeDailyAvailability(schedule: RecurringSchedule): string {
+		if (!schedule.availableWeekdays?.length) return 'Resets daily';
+
+		return `Available ${formatWeekdayList(schedule.availableWeekdays)}; resets`;
+	}
+
+	function formatWeekdayList(values: string[]): string {
+		const selected = new Set(values);
+		const labels = weekdays.filter((weekday) => selected.has(weekday)).map(titleCase);
+		if (labels.length === 1) return labels[0];
+		if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+
+		return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 	}
 
 	function taskRepeatCount(task: ChecklistTask): number {
@@ -172,7 +199,7 @@
 			};
 		}
 
-		const elapsedWindows = countResetWindowsSince(schedule, lastAccruedAt, windowStart);
+		const elapsedWindows = countAvailableResetWindowsSince(schedule, lastAccruedAt, windowStart);
 		available = Math.min(capacity, available + elapsedWindows * repeatCount);
 
 		return {
@@ -180,24 +207,6 @@
 			capacity,
 			lastAccruedAt: windowStart.toISOString()
 		};
-	}
-
-	function countResetWindowsSince(
-		schedule: RecurringSchedule,
-		lastAccruedAtValue: string,
-		currentWindowStart: Date
-	): number {
-		const lastAccruedAt = new Date(lastAccruedAtValue);
-		if (Number.isNaN(lastAccruedAt.getTime())) return 0;
-
-		let count = 0;
-		let cursor = getNextReset(schedule, lastAccruedAt);
-		while (cursor && cursor <= currentWindowStart && count < 10000) {
-			count += 1;
-			cursor = getNextReset(schedule, new Date(cursor.getTime() + 1));
-		}
-
-		return count;
 	}
 
 	function updateHideCompleted(details: { checked: boolean }): void {
@@ -250,6 +259,12 @@
 							class="rounded-base border border-dashed border-surface-700 p-4 text-sm text-surface-400"
 						>
 							This section has no tasks.
+						</p>
+					{:else if progress.total === 0 && hideCompletedTasks}
+						<p
+							class="rounded-base border border-dashed border-surface-700 p-4 text-sm text-surface-400"
+						>
+							No tasks are available today.
 						</p>
 					{:else if tasks.length === 0}
 						<p

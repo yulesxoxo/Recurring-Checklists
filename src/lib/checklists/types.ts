@@ -13,6 +13,7 @@ export type Weekday =
 export type RecurringSchedule = {
 	frequency: Frequency;
 	resetWeekday?: Weekday;
+	availableWeekdays?: Weekday[];
 	anchorDateTimeUtc?: string;
 	intervalMinutes?: number;
 	intervalMode?: IntervalMode;

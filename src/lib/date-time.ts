@@ -1,3 +1,4 @@
+import { weekdays } from './checklists/constants';
 import type { RecurringSchedule, Weekday } from './checklists/types';
 
 export type ScheduleTimeMode = 'local' | 'utc';
@@ -38,10 +39,7 @@ export function getResetWindowStart(schedule: RecurringSchedule, now = new Date(
 	}
 
 	if (schedule.frequency === 'daily') {
-		const candidate = new Date(
-			Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes)
-		);
-		return candidate > now ? addDays(candidate, -1) : candidate;
+		return getDailyWindowStart(schedule, now, hours, minutes);
 	}
 
 	if (schedule.frequency === 'weekly') {
@@ -57,7 +55,7 @@ export function getNextReset(schedule: RecurringSchedule, now = new Date()): Dat
 
 	switch (schedule.frequency) {
 		case 'daily':
-			return addDays(windowStart, 1);
+			return getNextDailyReset(schedule, windowStart);
 		case 'weekly':
 			return addDays(windowStart, 7);
 		case 'biweekly':
@@ -67,6 +65,30 @@ export function getNextReset(schedule: RecurringSchedule, now = new Date()): Dat
 	}
 }
 
+export function isScheduleAvailable(schedule: RecurringSchedule, now = new Date()): boolean {
+	if (schedule.frequency !== 'daily' || !schedule.availableWeekdays?.length) return true;
+
+	return schedule.availableWeekdays.includes(localWeekday(now));
+}
+
+export function countAvailableResetWindowsSince(
+	schedule: RecurringSchedule,
+	lastAccruedAtValue: string,
+	currentWindowStart: Date
+): number {
+	const lastAccruedAt = new Date(lastAccruedAtValue);
+	if (Number.isNaN(lastAccruedAt.getTime())) return 0;
+
+	let count = 0;
+	let cursor = getNextReset(schedule, lastAccruedAt);
+	while (cursor && cursor <= currentWindowStart && count < 10000) {
+		if (isScheduleAvailable(schedule, cursor)) count += 1;
+		cursor = getNextReset(schedule, new Date(cursor.getTime() + 1));
+	}
+
+	return count;
+}
+
 export function describeSchedule(schedule: RecurringSchedule): string {
 	const time = scheduleResetTimeUtc(schedule);
 
@@ -74,7 +96,7 @@ export function describeSchedule(schedule: RecurringSchedule): string {
 		case 'interval':
 			return describeIntervalSchedule(schedule);
 		case 'daily':
-			return `Resets daily at ${time} UTC`;
+			return `${describeDailyAvailability(schedule)} at ${time} UTC`;
 		case 'weekly':
 			return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${time} UTC`;
 		case 'biweekly':
@@ -279,6 +301,39 @@ function getWeeklyWindowStart(schedule: RecurringSchedule, now: Date, intervalDa
 	return candidate > now ? addDays(candidate, -intervalDays) : candidate;
 }
 
+function getDailyWindowStart(
+	schedule: RecurringSchedule,
+	now: Date,
+	hours: number,
+	minutes: number
+): Date {
+	let candidate = new Date(
+		Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), hours, minutes)
+	);
+	if (candidate > now) candidate = addDays(candidate, -1);
+
+	if (!schedule.availableWeekdays?.length) return candidate;
+
+	for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
+		if (isScheduleAvailable(schedule, candidate)) return candidate;
+		candidate = addDays(candidate, -1);
+	}
+
+	return candidate;
+}
+
+function getNextDailyReset(schedule: RecurringSchedule, windowStart: Date): Date {
+	let candidate = addDays(windowStart, 1);
+	if (!schedule.availableWeekdays?.length) return candidate;
+
+	for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
+		if (isScheduleAvailable(schedule, candidate)) return candidate;
+		candidate = addDays(candidate, 1);
+	}
+
+	return candidate;
+}
+
 function getBiweeklyWindowStart(schedule: RecurringSchedule, now: Date): Date | null {
 	if (!schedule.anchorDateTimeUtc) return null;
 
@@ -340,3 +395,33 @@ function formatTimeParts(hours: number, minutes: number): string {
 function titleCase(value: string): string {
 	return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 }
+
+function localWeekday(date: Date): Weekday {
+	return weekdaysByIndex[date.getDay()];
+}
+
+function describeDailyAvailability(schedule: RecurringSchedule): string {
+	const availableWeekdays = schedule.availableWeekdays;
+	if (!availableWeekdays?.length) return 'Resets daily';
+
+	return `Available ${formatWeekdayList(availableWeekdays)}; resets`;
+}
+
+function formatWeekdayList(values: Weekday[]): string {
+	const selected = new Set(values);
+	const labels = weekdays.filter((weekday) => selected.has(weekday)).map(titleCase);
+	if (labels.length === 1) return labels[0];
+	if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
+
+	return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
+}
+
+const weekdaysByIndex: Weekday[] = [
+	'sunday',
+	'monday',
+	'tuesday',
+	'wednesday',
+	'thursday',
+	'friday',
+	'saturday'
+];
