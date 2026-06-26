@@ -13,6 +13,19 @@
 				},
 				"tasks": [
 					{
+						"title": "Guild Hunt",
+						"schedule": {
+							"frequency": "daily",
+							"availableWeekdays": ["friday", "saturday", "sunday"],
+							"availableStartTimeUtc": "16:00",
+							"availableEndTimeUtc": "06:00",
+							"anchorDateTimeUtc": "2026-06-25T07:00:00.000Z"
+						}
+					},
+					{
+						"title": "Mystery Store"
+					},
+					{
 						"title": "Unstable Space",
 						"repeatCount": 2
 					},
@@ -38,9 +51,6 @@
 					},
 					{
 						"title": "Daily Mission"
-					},
-					{
-						"title": "Mystery Store"
 					},
 					{
 						"title": "Musician: Daily Routine",
