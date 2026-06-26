@@ -101,7 +101,7 @@
 
 		switch (schedule.frequency) {
 			case 'daily':
-				return `${describeDailyAvailability(schedule)} at ${resetTime}`;
+				return `${describeDailyAvailability(schedule, reference)} at ${resetTime}`;
 			case 'weekly':
 				return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
 			case 'biweekly':
@@ -113,18 +113,34 @@
 		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 	}
 
-	function describeDailyAvailability(schedule: RecurringSchedule): string {
+	function describeDailyAvailability(schedule: RecurringSchedule, reference: Date): string {
 		const descriptionParts = [
 			...(schedule.availableWeekdays?.length
 				? [formatWeekdayList(schedule.availableWeekdays)]
 				: []),
 			...(schedule.availableStartTimeUtc && schedule.availableEndTimeUtc
-				? [`${schedule.availableStartTimeUtc} - ${schedule.availableEndTimeUtc} UTC`]
+				? [describeAvailabilityTimeWindow(schedule, reference)]
 				: [])
 		];
 		if (descriptionParts.length === 0) return 'Resets daily';
 
 		return `Available ${descriptionParts.join(', ')}; resets`;
+	}
+
+	function describeAvailabilityTimeWindow(
+		scheduleValue: RecurringSchedule,
+		reference: Date
+	): string {
+		if (!scheduleValue.availableStartTimeUtc || !scheduleValue.availableEndTimeUtc) return '';
+
+		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTimeUtc, reference);
+		const localEnd = utcTimeToLocalTime(scheduleValue.availableEndTimeUtc, reference);
+		const utcWindow = `${scheduleValue.availableStartTimeUtc} - ${scheduleValue.availableEndTimeUtc} UTC`;
+		const localWindow = `${localStart} - ${localEnd} local`;
+
+		return localWindow === utcWindow.replace(' UTC', '')
+			? utcWindow
+			: `${localWindow} / ${utcWindow}`;
 	}
 
 	function taskRepeatCount(task: ChecklistTask): number {

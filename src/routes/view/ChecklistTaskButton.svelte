@@ -10,7 +10,6 @@
 		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
-		formatUtcReset,
 		formatWeekdayList,
 		getNextReset,
 		getResetWindowStart,
@@ -47,8 +46,9 @@
 	let isDone = $derived(taskIsDone());
 	let rowClass = $derived(taskRowClass());
 	let countLabel = $derived(taskUsesUnitControls() ? taskUnitStatus() : undefined);
+	let availabilityBadge = $derived(availabilityBadgeText());
+	let availabilityBadgeClass = $derived(availabilityBadgeStyle());
 	let customScheduleDisplay = $derived(customScheduleText());
-	let availabilityDisplay = $derived(availabilityText());
 	let resetDisplay = $derived(resetText());
 
 	function toggleTask(event: MouseEvent): void {
@@ -136,11 +136,15 @@
 		}
 
 		if (availability.status === 'missed') {
-			return 'cursor-not-allowed border-warning-800 bg-warning-950/20 opacity-70 hover:bg-warning-950/20';
+			return 'cursor-not-allowed border-error-800 bg-error-950/20 opacity-85 hover:bg-error-950/20';
+		}
+
+		if (availability.status === 'upcoming') {
+			return 'cursor-not-allowed border-primary-800 bg-primary-950/20 opacity-85 hover:bg-primary-950/20';
 		}
 
 		if (!isAvailable) {
-			return 'cursor-not-allowed border-surface-800 bg-surface-900 opacity-50 hover:bg-surface-900';
+			return 'cursor-not-allowed border-surface-700 bg-surface-950 opacity-45 hover:bg-surface-950';
 		}
 
 		return 'border-surface-800 bg-surface-950 hover:bg-surface-800';
@@ -252,18 +256,33 @@
 	}
 
 	function customScheduleText(): string | undefined {
-		return task.schedule ? describeViewSchedule(schedule, now) : undefined;
+		if (!task.schedule) return undefined;
+
+		return describeViewSchedule(schedule, now, !taskResetMatchesSectionDefault());
 	}
 
-	function availabilityText(): string | undefined {
-		if (availability.status === 'upcoming' && availability.availableAt) {
-			return `Available at ${formatLocalReset(availability.availableAt)} / ${formatUtcReset(availability.availableAt)}`;
+	function availabilityBadgeText(): string | undefined {
+		switch (availability.status) {
+			case 'upcoming':
+				return 'Upcoming';
+			case 'missed':
+				return isDone ? undefined : 'Missed';
+			case 'unavailable':
+				return 'Unavailable';
+			case 'available':
+				return undefined;
 		}
+	}
 
-		if (availability.status === 'missed' && !isDone) return 'Missed';
-		if (availability.status === 'unavailable') return 'Not available today';
-
-		return undefined;
+	function availabilityBadgeStyle(): string {
+		switch (availability.status) {
+			case 'upcoming':
+				return 'preset-tonal-primary';
+			case 'missed':
+				return 'preset-tonal-error';
+			default:
+				return 'preset-tonal-surface';
+		}
 	}
 
 	function resetText(): string | undefined {
@@ -272,7 +291,7 @@
 			return clearTime ? `Resets: ${formatLocalReset(clearTime)}` : undefined;
 		}
 
-		return task.schedule
+		return task.schedule && !taskResetMatchesSectionDefault()
 			? `Next reset: ${formatLocalReset(getNextReset(schedule, now))}`
 			: undefined;
 	}
@@ -292,7 +311,26 @@
 		return Number.isNaN(completedAt.getTime()) ? null : completedAt;
 	}
 
-	function describeViewSchedule(scheduleValue: RecurringSchedule, reference: Date): string {
+	function taskResetMatchesSectionDefault(): boolean {
+		if (schedule.frequency !== section.defaultSchedule.frequency) return false;
+		if (schedule.frequency === 'interval') return false;
+		if (scheduleResetTimeUtc(schedule) !== scheduleResetTimeUtc(section.defaultSchedule))
+			return false;
+
+		if (schedule.frequency === 'weekly' || schedule.frequency === 'biweekly') {
+			return (
+				(schedule.resetWeekday ?? 'monday') === (section.defaultSchedule.resetWeekday ?? 'monday')
+			);
+		}
+
+		return true;
+	}
+
+	function describeViewSchedule(
+		scheduleValue: RecurringSchedule,
+		reference: Date,
+		includeReset: boolean
+	): string {
 		if (scheduleValue.frequency === 'interval') return describeSchedule(scheduleValue);
 
 		const utcTime = scheduleResetTimeUtc(scheduleValue);
@@ -301,7 +339,9 @@
 
 		switch (scheduleValue.frequency) {
 			case 'daily':
-				return `${describeDailyAvailability(scheduleValue)} at ${resetTime}`;
+				return `${describeDailyAvailability(scheduleValue, reference, includeReset)}${
+					includeReset ? ` at ${resetTime}` : ''
+				}`;
 			case 'weekly':
 				return `Resets every ${titleCase(scheduleValue.resetWeekday ?? 'monday')} at ${resetTime}`;
 			case 'biweekly':
@@ -313,18 +353,38 @@
 		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
 	}
 
-	function describeDailyAvailability(scheduleValue: RecurringSchedule): string {
+	function describeDailyAvailability(
+		scheduleValue: RecurringSchedule,
+		reference: Date,
+		includeReset: boolean
+	): string {
 		const descriptionParts = [
 			...(scheduleValue.availableWeekdays?.length
 				? [formatWeekdayList(scheduleValue.availableWeekdays)]
 				: []),
 			...(scheduleValue.availableStartTimeUtc && scheduleValue.availableEndTimeUtc
-				? [`${scheduleValue.availableStartTimeUtc} - ${scheduleValue.availableEndTimeUtc} UTC`]
+				? [describeAvailabilityTimeWindow(scheduleValue, reference)]
 				: [])
 		];
-		if (descriptionParts.length === 0) return 'Resets daily';
+		if (descriptionParts.length === 0) return includeReset ? 'Resets daily' : '';
 
-		return `Available ${descriptionParts.join(', ')}; resets`;
+		return `Available ${descriptionParts.join(', ')}${includeReset ? '; resets' : ''}`;
+	}
+
+	function describeAvailabilityTimeWindow(
+		scheduleValue: RecurringSchedule,
+		reference: Date
+	): string {
+		if (!scheduleValue.availableStartTimeUtc || !scheduleValue.availableEndTimeUtc) return '';
+
+		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTimeUtc, reference);
+		const localEnd = utcTimeToLocalTime(scheduleValue.availableEndTimeUtc, reference);
+		const utcWindow = `${scheduleValue.availableStartTimeUtc} - ${scheduleValue.availableEndTimeUtc} UTC`;
+		const localWindow = `${localStart} - ${localEnd} local`;
+
+		return localWindow === utcWindow.replace(' UTC', '')
+			? utcWindow
+			: `${localWindow} / ${utcWindow}`;
 	}
 </script>
 
@@ -340,19 +400,15 @@
 			{#if countLabel}
 				<span class="badge preset-tonal-primary">{countLabel}</span>
 			{/if}
+			{#if availabilityBadge}
+				<span class={`badge ${availabilityBadgeClass}`}>{availabilityBadge}</span>
+			{/if}
 		</span>
 		{#if task.notes}
 			<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
 		{/if}
 		{#if customScheduleDisplay}
 			<span class="mt-2 block text-xs text-surface-400">{customScheduleDisplay}</span>
-		{/if}
-		{#if availabilityDisplay}
-			<span
-				class={`mt-2 block text-xs ${availability.status === 'missed' ? 'text-warning-300' : 'text-surface-400'}`}
-			>
-				{availabilityDisplay}
-			</span>
 		{/if}
 		{#if resetDisplay}
 			<span class="mt-1 block text-xs text-surface-400">{resetDisplay}</span>
