@@ -171,6 +171,8 @@
 	function replaceSchedule(schedule: RecurringSchedule, next: RecurringSchedule): void {
 		delete schedule.resetWeekday;
 		delete schedule.availableWeekdays;
+		delete schedule.availableStartTimeUtc;
+		delete schedule.availableEndTimeUtc;
 		delete schedule.anchorDateTimeUtc;
 		delete schedule.intervalMinutes;
 		delete schedule.intervalMode;
@@ -185,6 +187,8 @@
 					frequency,
 					resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
 					availableWeekdays: frequency === 'daily' ? schedule.availableWeekdays : undefined,
+					availableStartTimeUtc: frequency === 'daily' ? schedule.availableStartTimeUtc : undefined,
+					availableEndTimeUtc: frequency === 'daily' ? schedule.availableEndTimeUtc : undefined,
 					anchorDateTimeUtc:
 						frequency === 'biweekly'
 							? (schedule.anchorDateTimeUtc ?? `${todayUtc()}T05:00:00.000Z`)
@@ -225,6 +229,28 @@
 			schedule.availableWeekdays = next;
 		} else {
 			delete schedule.availableWeekdays;
+		}
+	}
+
+	function updateAvailableTimeWindowEnabled(schedule: RecurringSchedule, enabled: boolean): void {
+		if (enabled) {
+			schedule.availableStartTimeUtc = schedule.availableStartTimeUtc ?? '16:00';
+			schedule.availableEndTimeUtc = schedule.availableEndTimeUtc ?? '06:00';
+		} else {
+			delete schedule.availableStartTimeUtc;
+			delete schedule.availableEndTimeUtc;
+		}
+	}
+
+	function updateAvailableTimeWindow(
+		schedule: RecurringSchedule,
+		part: 'start' | 'end',
+		time: string
+	): void {
+		if (part === 'start') {
+			schedule.availableStartTimeUtc = time;
+		} else {
+			schedule.availableEndTimeUtc = time;
 		}
 	}
 
@@ -621,6 +647,44 @@
 						<span>{titleCase(weekday)}</span>
 					</label>
 				{/each}
+			</div>
+
+			<div class="mt-4 border-t border-surface-800 pt-3">
+				<label class="flex items-center gap-2 text-sm text-surface-300">
+					<input
+						class="checkbox"
+						type="checkbox"
+						checked={Boolean(schedule.availableStartTimeUtc && schedule.availableEndTimeUtc)}
+						onchange={(event) =>
+							updateAvailableTimeWindowEnabled(schedule, event.currentTarget.checked)}
+					/>
+					<span>Limit by time UTC</span>
+				</label>
+
+				{#if schedule.availableStartTimeUtc && schedule.availableEndTimeUtc}
+					<div class="mt-3 grid gap-3 sm:grid-cols-2">
+						<label class="label">
+							<span class="label-text">Available from UTC</span>
+							<input
+								class="input"
+								type="time"
+								value={schedule.availableStartTimeUtc}
+								onchange={(event) =>
+									updateAvailableTimeWindow(schedule, 'start', event.currentTarget.value)}
+							/>
+						</label>
+						<label class="label">
+							<span class="label-text">Available until UTC</span>
+							<input
+								class="input"
+								type="time"
+								value={schedule.availableEndTimeUtc}
+								onchange={(event) =>
+									updateAvailableTimeWindow(schedule, 'end', event.currentTarget.value)}
+							/>
+						</label>
+					</div>
+				{/if}
 			</div>
 		</div>
 	{/if}

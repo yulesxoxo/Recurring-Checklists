@@ -14,6 +14,8 @@ export type RecurringSchedule = {
 	frequency: Frequency;
 	resetWeekday?: Weekday;
 	availableWeekdays?: Weekday[];
+	availableStartTimeUtc?: string;
+	availableEndTimeUtc?: string;
 	anchorDateTimeUtc?: string;
 	intervalMinutes?: number;
 	intervalMode?: IntervalMode;

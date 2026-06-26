@@ -10,11 +10,12 @@
 		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
+		formatUtcReset,
 		formatWeekdayList,
 		getNextReset,
 		getResetWindowStart,
 		intervalCompletionExpiresAt,
-		isScheduleAvailable,
+		scheduleAvailability,
 		scheduleResetTimeUtc,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
@@ -41,11 +42,13 @@
 
 	let schedule = $derived(task.schedule ?? section.defaultSchedule);
 	let completion = $derived(appState.completions[checklistId]?.[section.id]?.[task.id]);
-	let isAvailable = $derived(isScheduleAvailable(schedule, now));
+	let availability = $derived(scheduleAvailability(schedule, now));
+	let isAvailable = $derived(availability.status === 'available');
 	let isDone = $derived(taskIsDone());
 	let rowClass = $derived(taskRowClass());
 	let countLabel = $derived(taskUsesUnitControls() ? taskUnitStatus() : undefined);
 	let customScheduleDisplay = $derived(customScheduleText());
+	let availabilityDisplay = $derived(availabilityText());
 	let resetDisplay = $derived(resetText());
 
 	function toggleTask(event: MouseEvent): void {
@@ -128,13 +131,19 @@
 	}
 
 	function taskRowClass(): string {
+		if (isDone && !hideCompleted) {
+			return 'border-surface-800 bg-surface-900 opacity-60 hover:bg-surface-900';
+		}
+
+		if (availability.status === 'missed') {
+			return 'cursor-not-allowed border-warning-800 bg-warning-950/20 opacity-70 hover:bg-warning-950/20';
+		}
+
 		if (!isAvailable) {
 			return 'cursor-not-allowed border-surface-800 bg-surface-900 opacity-50 hover:bg-surface-900';
 		}
 
-		return isDone && !hideCompleted
-			? 'border-surface-800 bg-surface-900 opacity-60 hover:bg-surface-900'
-			: 'border-surface-800 bg-surface-950 hover:bg-surface-800';
+		return 'border-surface-800 bg-surface-950 hover:bg-surface-800';
 	}
 
 	function taskUnitStatus(): string {
@@ -246,6 +255,17 @@
 		return task.schedule ? describeViewSchedule(schedule, now) : undefined;
 	}
 
+	function availabilityText(): string | undefined {
+		if (availability.status === 'upcoming' && availability.availableAt) {
+			return `Available at ${formatLocalReset(availability.availableAt)} / ${formatUtcReset(availability.availableAt)}`;
+		}
+
+		if (availability.status === 'missed' && !isDone) return 'Missed';
+		if (availability.status === 'unavailable') return 'Not available today';
+
+		return undefined;
+	}
+
 	function resetText(): string | undefined {
 		if (schedule.frequency === 'interval' && schedule.intervalMode === 'completion') {
 			const clearTime = completionIntervalClearTime(schedule, completion);
@@ -294,9 +314,17 @@
 	}
 
 	function describeDailyAvailability(scheduleValue: RecurringSchedule): string {
-		if (!scheduleValue.availableWeekdays?.length) return 'Resets daily';
+		const descriptionParts = [
+			...(scheduleValue.availableWeekdays?.length
+				? [formatWeekdayList(scheduleValue.availableWeekdays)]
+				: []),
+			...(scheduleValue.availableStartTimeUtc && scheduleValue.availableEndTimeUtc
+				? [`${scheduleValue.availableStartTimeUtc} - ${scheduleValue.availableEndTimeUtc} UTC`]
+				: [])
+		];
+		if (descriptionParts.length === 0) return 'Resets daily';
 
-		return `Available ${formatWeekdayList(scheduleValue.availableWeekdays)}; resets`;
+		return `Available ${descriptionParts.join(', ')}; resets`;
 	}
 </script>
 
@@ -319,8 +347,12 @@
 		{#if customScheduleDisplay}
 			<span class="mt-2 block text-xs text-surface-400">{customScheduleDisplay}</span>
 		{/if}
-		{#if !isAvailable}
-			<span class="mt-2 block text-xs text-surface-400">Not available today</span>
+		{#if availabilityDisplay}
+			<span
+				class={`mt-2 block text-xs ${availability.status === 'missed' ? 'text-warning-300' : 'text-surface-400'}`}
+			>
+				{availabilityDisplay}
+			</span>
 		{/if}
 		{#if resetDisplay}
 			<span class="mt-1 block text-xs text-surface-400">{resetDisplay}</span>

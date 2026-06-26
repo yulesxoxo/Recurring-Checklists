@@ -19,7 +19,7 @@
 		getNextReset,
 		getResetWindowStart,
 		intervalCompletionExpiresAt,
-		isScheduleAvailable,
+		scheduleAvailability,
 		scheduleResetTimeUtc,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
@@ -68,16 +68,21 @@
 
 	function visibleTasks(section: ChecklistSection): ChecklistTask[] {
 		return hideCompletedTasks
-			? availableTasks(section).filter((task) => !taskIsDone(section, task))
+			? availableTasks(section).filter(
+					(task) =>
+						!taskIsDone(section, task) &&
+						scheduleAvailability(effectiveTaskSchedule(section, task), now).status !== 'missed'
+				)
 			: section.tasks;
 	}
 
 	function availableTasks(section: ChecklistSection): ChecklistTask[] {
-		return section.tasks.filter((task) => taskIsAvailable(section, task));
+		return section.tasks.filter((task) => taskIsRelevantToday(section, task));
 	}
 
-	function taskIsAvailable(section: ChecklistSection, task: ChecklistTask): boolean {
-		return isScheduleAvailable(effectiveTaskSchedule(section, task), now);
+	function taskIsRelevantToday(section: ChecklistSection, task: ChecklistTask): boolean {
+		const status = scheduleAvailability(effectiveTaskSchedule(section, task), now).status;
+		return status === 'available' || status === 'upcoming' || status === 'missed';
 	}
 
 	function effectiveTaskSchedule(
@@ -109,9 +114,17 @@
 	}
 
 	function describeDailyAvailability(schedule: RecurringSchedule): string {
-		if (!schedule.availableWeekdays?.length) return 'Resets daily';
+		const descriptionParts = [
+			...(schedule.availableWeekdays?.length
+				? [formatWeekdayList(schedule.availableWeekdays)]
+				: []),
+			...(schedule.availableStartTimeUtc && schedule.availableEndTimeUtc
+				? [`${schedule.availableStartTimeUtc} - ${schedule.availableEndTimeUtc} UTC`]
+				: [])
+		];
+		if (descriptionParts.length === 0) return 'Resets daily';
 
-		return `Available ${formatWeekdayList(schedule.availableWeekdays)}; resets`;
+		return `Available ${descriptionParts.join(', ')}; resets`;
 	}
 
 	function taskRepeatCount(task: ChecklistTask): number {
@@ -261,7 +274,9 @@
 						<p
 							class="rounded-base border border-dashed border-surface-700 p-4 text-sm text-surface-400"
 						>
-							All tasks in this section are completed.
+							{progress.done === progress.total
+								? 'All tasks in this section are completed.'
+								: 'No available tasks to show.'}
 						</p>
 					{:else}
 						{#each tasks as task (task.id)}

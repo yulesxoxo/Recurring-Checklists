@@ -2,6 +2,13 @@ import { weekdays } from './checklists/constants';
 import type { RecurringSchedule, Weekday } from './checklists/types';
 
 export type ScheduleTimeMode = 'local' | 'utc';
+export type ScheduleAvailabilityStatus = 'available' | 'upcoming' | 'missed' | 'unavailable';
+
+export type ScheduleAvailability = {
+	status: ScheduleAvailabilityStatus;
+	availableAt?: Date;
+	unavailableAt?: Date;
+};
 
 const dayMs = 24 * 60 * 60 * 1000;
 const minuteMs = 60 * 1000;
@@ -66,9 +73,31 @@ export function getNextReset(schedule: RecurringSchedule, now = new Date()): Dat
 }
 
 export function isScheduleAvailable(schedule: RecurringSchedule, now = new Date()): boolean {
-	if (schedule.frequency !== 'daily' || !schedule.availableWeekdays?.length) return true;
+	return scheduleAvailability(schedule, now).status === 'available';
+}
 
-	return schedule.availableWeekdays.includes(localWeekday(now));
+export function scheduleAvailability(
+	schedule: RecurringSchedule,
+	now = new Date()
+): ScheduleAvailability {
+	if (schedule.frequency !== 'daily') return { status: 'available' };
+
+	if (!scheduleHasTimeWindow(schedule)) {
+		return isScheduleAvailableOnDate(schedule, now)
+			? { status: 'available' }
+			: { status: 'unavailable' };
+	}
+
+	const windowStart = getResetWindowStart(schedule, now);
+	if (!windowStart) return { status: 'unavailable' };
+
+	const { availableAt, unavailableAt } = getDailyAvailabilityWindow(schedule, windowStart);
+	if (!availableAt || !unavailableAt) return { status: 'available' };
+
+	if (now < availableAt) return { status: 'upcoming', availableAt, unavailableAt };
+	if (now < unavailableAt) return { status: 'available', availableAt, unavailableAt };
+
+	return { status: 'missed', availableAt, unavailableAt };
 }
 
 export function countAvailableResetWindowsSince(
@@ -82,7 +111,7 @@ export function countAvailableResetWindowsSince(
 	let count = 0;
 	let cursor = getNextReset(schedule, lastAccruedAt);
 	while (cursor && cursor <= currentWindowStart && count < 10000) {
-		if (isScheduleAvailable(schedule, cursor)) count += 1;
+		count += 1;
 		cursor = getNextReset(schedule, new Date(cursor.getTime() + 1));
 	}
 
@@ -352,11 +381,44 @@ function getDailyWindowStart(
 	if (!schedule.availableWeekdays?.length) return candidate;
 
 	for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
-		if (isScheduleAvailable(schedule, candidate)) return candidate;
+		if (isScheduleAvailableOnDate(schedule, candidate)) return candidate;
 		candidate = addDays(candidate, -1);
 	}
 
 	return candidate;
+}
+
+function getDailyAvailabilityWindow(
+	schedule: RecurringSchedule,
+	windowStart: Date
+): { availableAt?: Date; unavailableAt?: Date } {
+	if (!scheduleHasTimeWindow(schedule)) return {};
+
+	const startParts = parseResetTime(schedule.availableStartTimeUtc);
+	const endParts = parseResetTime(schedule.availableEndTimeUtc);
+	let availableAt = new Date(
+		Date.UTC(
+			windowStart.getUTCFullYear(),
+			windowStart.getUTCMonth(),
+			windowStart.getUTCDate(),
+			startParts.hours,
+			startParts.minutes
+		)
+	);
+	if (availableAt < windowStart) availableAt = addDays(availableAt, 1);
+
+	let unavailableAt = new Date(
+		Date.UTC(
+			availableAt.getUTCFullYear(),
+			availableAt.getUTCMonth(),
+			availableAt.getUTCDate(),
+			endParts.hours,
+			endParts.minutes
+		)
+	);
+	if (unavailableAt <= availableAt) unavailableAt = addDays(unavailableAt, 1);
+
+	return { availableAt, unavailableAt };
 }
 
 function getNextDailyReset(schedule: RecurringSchedule, windowStart: Date): Date {
@@ -364,7 +426,7 @@ function getNextDailyReset(schedule: RecurringSchedule, windowStart: Date): Date
 	if (!schedule.availableWeekdays?.length) return candidate;
 
 	for (let dayOffset = 0; dayOffset < 7; dayOffset += 1) {
-		if (isScheduleAvailable(schedule, candidate)) return candidate;
+		if (isScheduleAvailableOnDate(schedule, candidate)) return candidate;
 		candidate = addDays(candidate, 1);
 	}
 
@@ -437,11 +499,30 @@ function localWeekday(date: Date): Weekday {
 	return weekdaysByIndex[date.getDay()];
 }
 
+function isScheduleAvailableOnDate(schedule: RecurringSchedule, date: Date): boolean {
+	if (!schedule.availableWeekdays?.length) return true;
+
+	return schedule.availableWeekdays.includes(localWeekday(date));
+}
+
+function scheduleHasTimeWindow(schedule: RecurringSchedule): schedule is RecurringSchedule & {
+	availableStartTimeUtc: string;
+	availableEndTimeUtc: string;
+} {
+	return Boolean(schedule.availableStartTimeUtc && schedule.availableEndTimeUtc);
+}
+
 function describeDailyAvailability(schedule: RecurringSchedule): string {
 	const availableWeekdays = schedule.availableWeekdays;
-	if (!availableWeekdays?.length) return 'Resets daily';
+	const descriptionParts = [
+		...(availableWeekdays?.length ? [formatWeekdayList(availableWeekdays)] : []),
+		...(scheduleHasTimeWindow(schedule)
+			? [`${schedule.availableStartTimeUtc} - ${schedule.availableEndTimeUtc} UTC`]
+			: [])
+	];
+	if (descriptionParts.length === 0) return 'Resets daily';
 
-	return `Available ${formatWeekdayList(availableWeekdays)}; resets`;
+	return `Available ${descriptionParts.join(', ')}; resets`;
 }
 
 const weekdaysByIndex: Weekday[] = [

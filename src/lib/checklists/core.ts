@@ -41,12 +41,17 @@ export function normalizeSchedule(
 			: undefined;
 	const availableWeekdays =
 		frequency === 'daily' ? normalizeAvailableWeekdays(value.availableWeekdays) : undefined;
+	const availableTimeWindow =
+		frequency === 'daily'
+			? normalizeAvailableTimeWindow(value.availableStartTimeUtc, value.availableEndTimeUtc)
+			: {};
 	const intervalMode = value.intervalMode === 'completion' ? 'completion' : 'anchor';
 
 	return {
 		frequency,
 		resetWeekday,
 		availableWeekdays,
+		...availableTimeWindow,
 		anchorDateTimeUtc: normalizeScheduleAnchorDateTime(
 			value,
 			frequency,
@@ -247,6 +252,19 @@ function normalizePortableSchedule(
 		}
 	}
 
+	if (value.availableStartTimeUtc !== undefined || value.availableEndTimeUtc !== undefined) {
+		if (
+			value.frequency !== 'daily' ||
+			typeof value.availableStartTimeUtc !== 'string' ||
+			typeof value.availableEndTimeUtc !== 'string' ||
+			!isValidResetTime(value.availableStartTimeUtc) ||
+			!isValidResetTime(value.availableEndTimeUtc) ||
+			value.availableStartTimeUtc === value.availableEndTimeUtc
+		) {
+			return null;
+		}
+	}
+
 	if (value.resetTimeUtc !== undefined && !hasValidLegacyResetTime) return null;
 
 	if (
@@ -320,6 +338,19 @@ function normalizeAvailableWeekdays(value: unknown): Weekday[] | undefined {
 
 function isValidAvailableWeekdays(value: unknown): boolean {
 	return Array.isArray(value) && value.every(isWeekday);
+}
+
+function normalizeAvailableTimeWindow(
+	startTime: unknown,
+	endTime: unknown
+): Pick<RecurringSchedule, 'availableStartTimeUtc' | 'availableEndTimeUtc'> {
+	if (typeof startTime !== 'string' || typeof endTime !== 'string') return {};
+
+	const availableStartTimeUtc = normalizeResetTime(startTime);
+	const availableEndTimeUtc = normalizeResetTime(endTime);
+	if (availableStartTimeUtc === availableEndTimeUtc) return {};
+
+	return { availableStartTimeUtc, availableEndTimeUtc };
 }
 
 function normalizeBiweeklyAnchorDateTime(
