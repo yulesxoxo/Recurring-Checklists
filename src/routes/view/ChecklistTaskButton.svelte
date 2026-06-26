@@ -405,7 +405,7 @@
 			{/if}
 		</span>
 		{#if task.notes}
-			<span class="mt-1 block text-sm text-surface-400">{task.notes}</span>
+			<span class="mt-1 block whitespace-pre-line text-sm text-surface-400">{task.notes}</span>
 		{/if}
 		{#if customScheduleDisplay}
 			<span class="mt-2 block text-xs text-surface-400">{customScheduleDisplay}</span>
