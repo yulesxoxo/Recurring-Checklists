@@ -4,17 +4,9 @@
 	import ChecklistNotFound from '../ChecklistNotFound.svelte';
 	import ChecklistView from './ChecklistView.svelte';
 	import PageHeader from '../PageHeader.svelte';
-	import {
-		DIRECT_LINK_PARAM,
-		type AppState,
-		type Checklist,
-		createEmptyAppState,
-		loadAppState,
-		saveAppState
-	} from '$lib/checklists';
+	import { appState, appStateStorage, initializeAppState } from '$lib/appState.svelte';
+	import { DIRECT_LINK_PARAM, type Checklist } from '$lib/checklists';
 
-	let appState = $state<AppState>(createEmptyAppState());
-	let mounted = $state(false);
 	let now = $state(new Date());
 	let link = $state<string | null>(null);
 	let checklist = $derived(findChecklist(link, appState.checklists));
@@ -23,8 +15,7 @@
 
 	onMount(() => {
 		link = new URLSearchParams(window.location.search).get(DIRECT_LINK_PARAM);
-		appState = loadAppState(localStorage);
-		mounted = true;
+		void initializeAppState();
 
 		let timer: number | undefined;
 		const delayToNextMinute = 60_000 - (Date.now() % 60_000);
@@ -40,10 +31,6 @@
 			if (timer !== undefined) window.clearInterval(timer);
 		};
 	});
-
-	function persist(): void {
-		if (mounted) saveAppState(localStorage, appState);
-	}
 
 	function findChecklist(value: string | null, checklists: Checklist[]): Checklist | null {
 		if (!value) return null;
@@ -63,7 +50,7 @@
 
 <main class="min-h-screen bg-surface-950 text-surface-50">
 	<section class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
-		{#if !mounted}
+		{#if !appStateStorage.initialized}
 			<div class="flex min-h-80 items-center justify-center">
 				<Progress class="w-fit" value={null} aria-label="Loading checklist">
 					<Progress.Circle class="[--size:--spacing(16)]">
@@ -75,7 +62,7 @@
 		{:else}
 			<PageHeader title={pageTitle} description={pageDescription} />
 			{#if checklist}
-				<ChecklistView bind:appState {checklist} bind:now onPersist={persist} />
+				<ChecklistView {checklist} bind:now />
 			{:else}
 				<ChecklistNotFound />
 			{/if}

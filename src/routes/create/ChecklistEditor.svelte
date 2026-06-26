@@ -2,12 +2,14 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { ArrowDown, ArrowUp, ChevronDown, Plus, Save, Trash2 } from '@lucide/svelte';
-	import { Accordion } from '@skeletonlabs/skeleton-svelte';
+	import { Accordion, Progress } from '@skeletonlabs/skeleton-svelte';
 	import { onMount } from 'svelte';
 	import ChecklistNotFound from '../ChecklistNotFound.svelte';
 	import SkeletonDatePicker from './SkeletonDatePicker.svelte';
+	import { appState, initializeAppState } from '$lib/appState.svelte';
 	import {
 		DIRECT_LINK_PARAM,
+		type AppState,
 		type Checklist,
 		type ChecklistSection,
 		type ChecklistTask,
@@ -17,12 +19,10 @@
 		allFrequencies,
 		insertArrayItem,
 		linkKeyConflict,
-		loadAppState,
 		moveArrayItem,
 		normalizeLinkKey,
 		normalizeSchedule,
 		normalizeTaskCounts,
-		saveAppState,
 		titleCase,
 		weekdays
 	} from '$lib/checklists';
@@ -54,10 +54,10 @@
 	let now = $state(new Date());
 	let scheduleTimeModes = $state<Record<string, ScheduleTimeMode>>({});
 	let editChecklistId = $state<string | null>(null);
+	let editorReady = $state(false);
 
 	onMount(() => {
-		editChecklistId = new URLSearchParams(window.location.search).get('edit');
-		if (editChecklistId) loadChecklistForEditing(editChecklistId);
+		void initializeEditor();
 
 		let timer: number | undefined;
 		const delayToNextMinute = 60_000 - (Date.now() % 60_000);
@@ -74,8 +74,14 @@
 		};
 	});
 
+	async function initializeEditor(): Promise<void> {
+		await initializeAppState();
+		editChecklistId = new URLSearchParams(window.location.search).get('edit');
+		if (editChecklistId) loadChecklistForEditing(editChecklistId);
+		editorReady = true;
+	}
+
 	function loadChecklistForEditing(checklistId: string): void {
-		const appState = loadAppState(localStorage);
 		const existing = appState.checklists.find((item) => item.id === checklistId);
 
 		if (!existing) {
@@ -89,7 +95,6 @@
 	}
 
 	function saveChecklist(): void {
-		const appState = loadAppState(localStorage);
 		const linkKey = normalizeLinkKey(checklist.linkKey);
 		const conflict = linkKeyConflict(appState.checklists, linkKey, editChecklistId ?? checklist.id);
 		if (conflict) {
@@ -131,7 +136,6 @@
 			cleanupCompletions(appState, savedChecklist);
 		}
 
-		saveAppState(localStorage, appState);
 		void goto(resolve('/'), { replaceState: true });
 	}
 
@@ -333,11 +337,8 @@
 		return JSON.parse(JSON.stringify(value)) as Checklist;
 	}
 
-	function cleanupCompletions(
-		appState: ReturnType<typeof loadAppState>,
-		savedChecklist: Checklist
-	): void {
-		const checklistCompletions = appState.completions[savedChecklist.id];
+	function cleanupCompletions(state: AppState, savedChecklist: Checklist): void {
+		const checklistCompletions = state.completions[savedChecklist.id];
 		if (!checklistCompletions) return;
 
 		const sectionIds = new Set(savedChecklist.sections.map((section) => section.id));
@@ -608,7 +609,16 @@
 	{/if}
 {/snippet}
 
-{#if checklistNotFound}
+{#if !editorReady}
+	<section class="flex min-h-80 items-center justify-center">
+		<Progress class="w-fit" value={null} aria-label="Loading checklist editor">
+			<Progress.Circle class="[--size:--spacing(16)]">
+				<Progress.CircleTrack />
+				<Progress.CircleRange />
+			</Progress.Circle>
+		</Progress>
+	</section>
+{:else if checklistNotFound}
 	<ChecklistNotFound />
 {:else}
 	<section class="rounded-container border border-surface-800 bg-surface-900 p-5 shadow-sm">

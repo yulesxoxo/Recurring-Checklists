@@ -1,6 +1,6 @@
 <script lang="ts">
+	import { appState } from '$lib/appState.svelte';
 	import type {
-		AppState,
 		ChecklistSection,
 		ChecklistTask,
 		CompletionRecord,
@@ -17,21 +17,17 @@
 	} from '$lib/date-time';
 
 	let {
-		appState = $bindable<AppState>(),
 		checklistId,
 		section,
 		task,
 		now = $bindable<Date>(),
-		hideCompleted,
-		onPersist
+		hideCompleted
 	}: {
-		appState: AppState;
 		checklistId: string;
 		section: ChecklistSection;
 		task: ChecklistTask;
 		now: Date;
 		hideCompleted: boolean;
-		onPersist: () => void;
 	} = $props();
 
 	type BankedTaskStatus = {
@@ -70,7 +66,6 @@
 		}
 
 		now = new Date();
-		onPersist();
 	}
 
 	function toggleTaskUnit(): void {
@@ -83,11 +78,11 @@
 	}
 
 	function completeTaskUnit(): void {
-		appState.completions[checklistId] ??= {};
-		appState.completions[checklistId][section.id] ??= {};
-
 		const record = completion ?? {};
 		const completedAt = new Date().toISOString();
+
+		appState.completions[checklistId] ??= {};
+		appState.completions[checklistId][section.id] ??= {};
 
 		if (taskHasCarryover()) {
 			const status = bankedTaskStatus(record);
@@ -111,7 +106,6 @@
 		}
 
 		now = new Date();
-		onPersist();
 	}
 
 	function resetTaskUnit(): void {
@@ -120,7 +114,6 @@
 		}
 
 		now = new Date();
-		onPersist();
 	}
 
 	function taskIsDone(): boolean {

@@ -2,20 +2,11 @@
 	import { onMount } from 'svelte';
 	import { Progress } from '@skeletonlabs/skeleton-svelte';
 	import ChecklistManage from './ChecklistManage.svelte';
-	import { type AppState, createEmptyAppState, loadAppState, saveAppState } from '$lib/checklists';
-
-	let appState = $state<AppState>(createEmptyAppState());
-	let mounted = $state(false);
+	import { appStateStorage, initializeAppState } from '$lib/appState.svelte';
 
 	onMount(() => {
-		appState = loadAppState(localStorage);
-		mounted = true;
-		persist();
+		void initializeAppState();
 	});
-
-	function persist(): void {
-		if (mounted) saveAppState(localStorage, appState);
-	}
 </script>
 
 <svelte:head>
@@ -27,7 +18,7 @@
 </svelte:head>
 
 <main class="min-h-screen bg-surface-950 text-surface-50">
-	{#if !mounted}
+	{#if !appStateStorage.initialized}
 		<section class="flex min-h-screen items-center justify-center px-4 py-10">
 			<Progress class="w-fit" value={null} aria-label="Loading checklists">
 				<Progress.Circle class="[--size:--spacing(16)]">
@@ -37,6 +28,6 @@
 			</Progress>
 		</section>
 	{:else}
-		<ChecklistManage bind:appState onPersist={persist} />
+		<ChecklistManage />
 	{/if}
 </main>

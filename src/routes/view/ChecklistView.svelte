@@ -2,8 +2,8 @@
 	import { Switch } from '@skeletonlabs/skeleton-svelte';
 	import { CheckCircle2 } from '@lucide/svelte';
 	import ChecklistTaskButton from './ChecklistTaskButton.svelte';
+	import { appState } from '$lib/appState.svelte';
 	import {
-		type AppState,
 		type Checklist,
 		type ChecklistSection,
 		type ChecklistTask,
@@ -22,15 +22,11 @@
 	} from '$lib/date-time';
 
 	let {
-		appState = $bindable<AppState>(),
 		checklist,
-		now = $bindable<Date>(),
-		onPersist
+		now = $bindable<Date>()
 	}: {
-		appState: AppState;
 		checklist: Checklist;
 		now: Date;
-		onPersist: () => void;
 	} = $props();
 
 	type BankedTaskStatus = {
@@ -264,13 +260,11 @@
 					{:else}
 						{#each tasks as task (task.id)}
 							<ChecklistTaskButton
-								bind:appState
 								checklistId={checklist.id}
 								{section}
 								{task}
 								bind:now
 								hideCompleted={hideCompletedTasks}
-								{onPersist}
 							/>
 						{/each}
 					{/if}

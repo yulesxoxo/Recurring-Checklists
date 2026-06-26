@@ -16,9 +16,9 @@
 	} from '@lucide/svelte';
 	import { SvelteURL } from 'svelte/reactivity';
 	import PageHeader from './PageHeader.svelte';
+	import { appState } from '$lib/appState.svelte';
 	import {
 		DIRECT_LINK_PARAM,
-		type AppState,
 		type Checklist,
 		countTasks,
 		exportPortableChecklist,
@@ -43,14 +43,6 @@
 			source: module.default
 		}))
 		.sort((left, right) => left.name.localeCompare(right.name));
-
-	let {
-		appState = $bindable<AppState>(),
-		onPersist
-	}: {
-		appState: AppState;
-		onPersist: () => void;
-	} = $props();
 
 	let importInput = $state<HTMLInputElement>();
 	let importFeedback = $state('');
@@ -110,7 +102,6 @@
 
 		appState.checklists = [...appState.checklists, result.checklist];
 		importFeedback = `Imported "${result.checklist.name}".`;
-		onPersist();
 	}
 
 	function createChecklist(): void {
@@ -138,7 +129,6 @@
 
 		appState.checklists = appState.checklists.filter((item) => item.id !== checklist.id);
 		delete appState.completions[checklist.id];
-		onPersist();
 	}
 
 	function addTemplateById(templateId: string): void {
@@ -161,7 +151,6 @@
 
 		appState.checklists = [...appState.checklists, result.checklist];
 		importFeedback = `Added "${result.checklist.name}".`;
-		onPersist();
 	}
 
 	function addSelectedTemplate(details: { value: string }): void {
