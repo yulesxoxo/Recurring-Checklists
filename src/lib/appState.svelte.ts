@@ -25,12 +25,16 @@ export async function initializeAppState(): Promise<void> {
 
 async function initializeState(): Promise<void> {
 	replaceAppState(await loadStoredAppState());
-	appStateStorage.initialized = true;
 
 	// Start Auto Persist
 	$effect.root(() => {
+		let ready = false;
+
 		$effect(() => {
-			if (!appStateStorage.initialized) return;
+			if (!ready) {
+				ready = true;
+				return;
+			}
 			$state.snapshot(appState);
 			if (persistTimer !== undefined) window.clearTimeout(persistTimer);
 
@@ -41,9 +45,9 @@ async function initializeState(): Promise<void> {
 		});
 	});
 
-	window.addEventListener('pagehide', () => {
-		if (!browser || !appStateStorage.initialized) return;
+	appStateStorage.initialized = true;
 
+	window.addEventListener('pagehide', () => {
 		if (persistTimer !== undefined) {
 			window.clearTimeout(persistTimer);
 			persistTimer = undefined;
