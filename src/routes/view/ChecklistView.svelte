@@ -9,13 +9,13 @@
 		type ChecklistTask,
 		type CompletionRecord,
 		type RecurringSchedule,
-		countTasks,
-		weekdays
+		countTasks
 	} from '$lib/checklists';
 	import {
 		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
+		formatWeekdayList,
 		getNextReset,
 		getResetWindowStart,
 		intervalCompletionExpiresAt,
@@ -112,15 +112,6 @@
 		if (!schedule.availableWeekdays?.length) return 'Resets daily';
 
 		return `Available ${formatWeekdayList(schedule.availableWeekdays)}; resets`;
-	}
-
-	function formatWeekdayList(values: string[]): string {
-		const selected = new Set(values);
-		const labels = weekdays.filter((weekday) => selected.has(weekday)).map(titleCase);
-		if (labels.length === 1) return labels[0];
-		if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-
-		return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 	}
 
 	function taskRepeatCount(task: ChecklistTask): number {

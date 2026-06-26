@@ -89,6 +89,17 @@ export function countAvailableResetWindowsSince(
 	return count;
 }
 
+export function intervalCompletionExpiresAt(
+	schedule: RecurringSchedule,
+	completedAt: Date
+): Date | null {
+	if (schedule.frequency !== 'interval' || (schedule.intervalMode ?? 'anchor') !== 'completion') {
+		return null;
+	}
+
+	return new Date(completedAt.getTime() + intervalMinutes(schedule) * minuteMs);
+}
+
 export function describeSchedule(schedule: RecurringSchedule): string {
 	const time = scheduleResetTimeUtc(schedule);
 
@@ -104,15 +115,41 @@ export function describeSchedule(schedule: RecurringSchedule): string {
 	}
 }
 
-export function intervalCompletionExpiresAt(
-	schedule: RecurringSchedule,
-	completedAt: Date
-): Date | null {
-	if (schedule.frequency !== 'interval' || (schedule.intervalMode ?? 'anchor') !== 'completion') {
-		return null;
+export function formatWeekdayList(values: Weekday[]): string {
+	const selected = new Set(values);
+	const selectedWeekdays = weekdays.filter((weekday) => selected.has(weekday));
+	const labels: string[] = [];
+
+	for (let index = 0; index < selectedWeekdays.length; index += 1) {
+		const start = selectedWeekdays[index];
+		let end = start;
+		let runLength = 1;
+
+		while (
+			index + 1 < selectedWeekdays.length &&
+			weekdayOrder(selectedWeekdays[index + 1]) === weekdayOrder(end) + 1
+		) {
+			index += 1;
+			end = selectedWeekdays[index];
+			runLength += 1;
+		}
+
+		if (runLength >= 3) {
+			labels.push(`${titleCase(start)} - ${titleCase(end)}`);
+		} else if (runLength === 2) {
+			labels.push(titleCase(start), titleCase(end));
+		} else {
+			labels.push(titleCase(start));
+		}
 	}
 
-	return new Date(completedAt.getTime() + intervalMinutes(schedule) * minuteMs);
+	if (labels.length === 1) return labels[0];
+	if (labels.length === 2 && !labels.some((label) => label.includes(' - '))) {
+		return `${labels[0]} and ${labels[1]}`;
+	}
+	if (labels.length === 2) return `${labels[0]}, ${labels[1]}`;
+
+	return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 }
 
 export function formatUtcReset(date: Date | null): string {
@@ -407,15 +444,6 @@ function describeDailyAvailability(schedule: RecurringSchedule): string {
 	return `Available ${formatWeekdayList(availableWeekdays)}; resets`;
 }
 
-function formatWeekdayList(values: Weekday[]): string {
-	const selected = new Set(values);
-	const labels = weekdays.filter((weekday) => selected.has(weekday)).map(titleCase);
-	if (labels.length === 1) return labels[0];
-	if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-
-	return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
-}
-
 const weekdaysByIndex: Weekday[] = [
 	'sunday',
 	'monday',
@@ -425,3 +453,7 @@ const weekdaysByIndex: Weekday[] = [
 	'friday',
 	'saturday'
 ];
+
+function weekdayOrder(weekday: Weekday): number {
+	return weekdays.indexOf(weekday);
+}

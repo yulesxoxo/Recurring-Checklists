@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { appState } from '$lib/appState.svelte';
-	import { weekdays } from '$lib/checklists';
 	import type {
 		ChecklistSection,
 		ChecklistTask,
@@ -11,6 +10,7 @@
 		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
+		formatWeekdayList,
 		getNextReset,
 		getResetWindowStart,
 		intervalCompletionExpiresAt,
@@ -243,7 +243,7 @@
 	}
 
 	function customScheduleText(): string | undefined {
-		return task.schedule ? `Custom schedule: ${describeViewSchedule(schedule, now)}` : undefined;
+		return task.schedule ? describeViewSchedule(schedule, now) : undefined;
 	}
 
 	function resetText(): string | undefined {
@@ -297,15 +297,6 @@
 		if (!scheduleValue.availableWeekdays?.length) return 'Resets daily';
 
 		return `Available ${formatWeekdayList(scheduleValue.availableWeekdays)}; resets`;
-	}
-
-	function formatWeekdayList(values: string[]): string {
-		const selected = new Set(values);
-		const labels = weekdays.filter((weekday) => selected.has(weekday)).map(titleCase);
-		if (labels.length === 1) return labels[0];
-		if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-
-		return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 	}
 </script>
 

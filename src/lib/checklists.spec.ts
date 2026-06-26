@@ -362,7 +362,17 @@ describe('schedule normalization', () => {
 				anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
 				availableWeekdays: ['sunday', 'monday', 'friday', 'saturday']
 			})
-		).toBe('Available Monday, Friday, Saturday, and Sunday; resets at 07:00 UTC');
+		).toBe('Available Monday, Friday - Sunday; resets at 07:00 UTC');
+	});
+
+	it('collapses three or more consecutive availability weekdays into a range', () => {
+		expect(
+			describeSchedule({
+				frequency: 'daily',
+				anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
+				availableWeekdays: ['friday', 'saturday', 'sunday']
+			})
+		).toBe('Available Friday - Sunday; resets at 07:00 UTC');
 	});
 
 	it('ignores availability when every daily weekday is selected', () => {
