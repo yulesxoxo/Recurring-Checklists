@@ -105,6 +105,22 @@ export function linkKeyConflict(
 	);
 }
 
+export function uniqueLinkKey(
+	checklists: Checklist[],
+	linkKey: string | undefined
+): string | undefined {
+	const normalized = normalizeLinkKey(linkKey);
+	if (!normalized) return undefined;
+	if (!linkKeyConflict(checklists, normalized)) return normalized;
+
+	for (let suffix = 2; suffix < 10_000; suffix += 1) {
+		const candidate = `${normalized}-${suffix}`;
+		if (!linkKeyConflict(checklists, candidate)) return candidate;
+	}
+
+	return undefined;
+}
+
 export function importPortableChecklists(
 	json: string,
 	options: ImportPortableChecklistsOptions = {}
