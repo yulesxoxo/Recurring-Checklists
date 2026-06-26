@@ -6,6 +6,7 @@ import type { AppState } from './checklists/types';
 const DATABASE_NAME = 'recurring-checklists';
 const DATABASE_VERSION = 1;
 const STORE_NAME = 'key-value';
+const PERSIST_DEBOUNCE_MS = 10_000;
 
 export const appState = $state<AppState>(createEmptyAppState());
 export const appStateStorage = $state({
@@ -14,7 +15,7 @@ export const appStateStorage = $state({
 
 let initializing: Promise<void> | null = null;
 let persistQueue = Promise.resolve();
-let autoPersistStarted = false;
+let persistTimer: number | undefined;
 
 export async function initializeAppState(): Promise<void> {
 	if (!browser) return;
@@ -25,7 +26,31 @@ export async function initializeAppState(): Promise<void> {
 async function initializeState(): Promise<void> {
 	replaceAppState(await loadStoredAppState());
 	appStateStorage.initialized = true;
-	startAutoPersist();
+
+	// Start Auto Persist
+	$effect.root(() => {
+		$effect(() => {
+			if (!appStateStorage.initialized) return;
+			$state.snapshot(appState);
+			if (persistTimer !== undefined) window.clearTimeout(persistTimer);
+
+			persistTimer = window.setTimeout(() => {
+				persistTimer = undefined;
+				queuePersist(JSON.stringify(appState));
+			}, PERSIST_DEBOUNCE_MS);
+		});
+	});
+
+	window.addEventListener('pagehide', () => {
+		if (!browser || !appStateStorage.initialized) return;
+
+		if (persistTimer !== undefined) {
+			window.clearTimeout(persistTimer);
+			persistTimer = undefined;
+		}
+
+		queuePersist(JSON.stringify(appState));
+	});
 }
 
 async function loadStoredAppState(): Promise<AppState> {
@@ -47,24 +72,6 @@ function replaceAppState(nextState: AppState): void {
 	appState.version = nextState.version;
 	appState.checklists = nextState.checklists;
 	appState.completions = nextState.completions;
-}
-
-function startAutoPersist(): void {
-	if (autoPersistStarted) return;
-	autoPersistStarted = true;
-
-	$effect.root(() => {
-		let previous = '';
-
-		$effect(() => {
-			if (!appStateStorage.initialized) return;
-			const snapshot = JSON.stringify(appState);
-
-			if (snapshot === previous) return;
-			previous = snapshot;
-			queuePersist(snapshot);
-		});
-	});
 }
 
 function queuePersist(snapshot: string): void {
