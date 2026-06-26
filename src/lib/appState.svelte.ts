@@ -31,16 +31,17 @@ async function initializeState(): Promise<void> {
 		let ready = false;
 
 		$effect(() => {
+			const data = JSON.stringify(appState);
 			if (!ready) {
 				ready = true;
 				return;
 			}
-			$state.snapshot(appState);
+
 			if (persistTimer !== undefined) window.clearTimeout(persistTimer);
 
 			persistTimer = window.setTimeout(() => {
 				persistTimer = undefined;
-				queuePersist(JSON.stringify(appState));
+				queuePersist(data);
 			}, PERSIST_DEBOUNCE_MS);
 		});
 	});
@@ -79,6 +80,7 @@ function replaceAppState(nextState: AppState): void {
 }
 
 function queuePersist(snapshot: string): void {
+	console.log('persisting');
 	persistQueue = persistQueue
 		.catch(() => undefined)
 		.then(() => setStoredValue(STORAGE_KEY, snapshot));
