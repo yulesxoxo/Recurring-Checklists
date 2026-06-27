@@ -27,8 +27,6 @@ import {
 	taskRemainingCount,
 	uniqueLinkKey
 } from './checklists';
-import { driveFileIdFromUrl } from './google-drive';
-import { buildShareImportUrl, decodeShareImportUrl, encodeShareImportUrl } from './share-import';
 
 class MemoryStorage implements Storage {
 	private store = new Map<string, string>();
@@ -854,50 +852,6 @@ describe('portable imports', () => {
 		);
 
 		expect(result.ok).toBe(false);
-	});
-});
-
-describe('share import links', () => {
-	it('round-trips Drive download URLs through a query-safe base64url value', () => {
-		const fileUrl = 'https://drive.google.com/uc?export=download&id=file_123-ABC';
-		const encoded = encodeShareImportUrl(fileUrl);
-
-		expect(encoded).not.toContain('+');
-		expect(encoded).not.toContain('/');
-		expect(encoded).not.toContain('=');
-		expect(decodeShareImportUrl(encoded)).toEqual({ ok: true, url: fileUrl });
-	});
-
-	it('builds an app import URL without preserving unrelated query params', () => {
-		const importUrl = buildShareImportUrl(
-			'https://drive.google.com/uc?export=download&id=file-id',
-			'https://example.com/view/?checklist=old#section'
-		);
-		const parsed = new URL(importUrl);
-
-		expect(parsed.origin).toBe('https://example.com');
-		expect(parsed.pathname).toBe('/');
-		expect(parsed.hash).toBe('');
-		expect(parsed.searchParams.has('checklist')).toBe(false);
-		expect(decodeShareImportUrl(parsed.searchParams.get('import') ?? '').ok).toBe(true);
-	});
-
-	it('rejects malformed and non-HTTPS import values', () => {
-		expect(decodeShareImportUrl('not valid!').ok).toBe(false);
-		expect(decodeShareImportUrl(encodeShareImportUrl('http://example.com/template.json'))).toEqual({
-			ok: false,
-			error: 'Import URL must use HTTPS.'
-		});
-	});
-
-	it('extracts Google Drive file IDs from supported URL shapes', () => {
-		expect(driveFileIdFromUrl('https://drive.google.com/uc?export=download&id=1tuEHHVMmBU')).toBe(
-			'1tuEHHVMmBU'
-		);
-		expect(driveFileIdFromUrl('https://drive.google.com/file/d/file-id_123/view')).toBe(
-			'file-id_123'
-		);
-		expect(driveFileIdFromUrl('https://example.com/file/d/file-id/view')).toBeNull();
 	});
 });
 

@@ -7,13 +7,14 @@ A SvelteKit app for browser-local recurring checklists. Create checklists with s
 - Create, edit, delete, import, and export checklist definitions.
 - Organize checklists into sections with default schedules.
 - Override schedules per task when one item needs a different cadence.
+- Track repeatable tasks as counters, including carryover banks for tasks that can accumulate missed attempts.
 - Supported schedules:
   - Daily resets at a configured UTC or local time.
   - Weekly resets on a selected weekday.
   - Biweekly resets from an anchored reset date.
   - Interval resets based on either a fixed anchor or the task's completion time.
 - Copy direct links with `?link=<key>` for checklist access.
-- Store checklist definitions and completion state in `localStorage`.
+- Store checklist definitions and completion state locally in the browser.
 - Ship to Cloudflare Workers through the SvelteKit Cloudflare adapter.
 
 ## Tech Stack
@@ -74,13 +75,15 @@ pnpm preview
 | `pnpm gen`        | Generate Cloudflare Worker types.                                 |
 | `pnpm deploy`     | Build and deploy with Wrangler.                                   |
 
-## Data and Sharing
+## Data, Sync, and Sharing
 
-The app is client-side first. It stores state under the `recurring-checklists:v1` localStorage key, so checklists and completions stay in the current browser profile unless exported or manually cleared.
+The app is client-side first. It stores state in the current browser profile using IndexedDB.
+
+There is currently no built-in cloud sync provider. Checklists and completions stay on the current device/browser profile unless exported, imported elsewhere, or manually cleared.
 
 Checklist exports are portable JSON files containing the checklist structure and schedules, but not completion history. Imports validate the portable format and reject duplicate direct-link keys.
 
-Direct links use the `link` query parameter. A checklist can define a human-readable key, or the app falls back to the checklist ID:
+Direct links are local app links. They use the `link` query parameter and open a checklist that already exists in the current browser profile. A checklist can define a human-readable key, or the app falls back to the checklist ID:
 
 ```text
 /view/?link=NTE

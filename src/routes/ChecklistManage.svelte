@@ -1,25 +1,22 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { onMount } from 'svelte';
 	import { Menu, Portal } from '@skeletonlabs/skeleton-svelte';
 	import {
 		ChevronDown,
 		ClipboardList,
-		Cloud,
 		Copy,
 		DoorOpen,
 		Download,
 		Pencil,
 		Plus,
 		RotateCcw,
-		Share2,
 		Trash2,
 		Upload
 	} from '@lucide/svelte';
 	import { SvelteURL } from 'svelte/reactivity';
 	import PageHeader from './PageHeader.svelte';
-	import { appState, appStateStorage, connectDriveSync, syncDriveNow } from '$lib/appState.svelte';
+	import { appState } from '$lib/appState.svelte';
 	import {
 		DIRECT_LINK_PARAM,
 		type Checklist,
@@ -28,14 +25,6 @@
 		importPortableChecklists,
 		uniqueLinkKey
 	} from '$lib/checklists';
-	import {
-		authorizeDrive,
-		createPublicDriveJsonFile,
-		downloadDriveJsonFile,
-		driveFileIdFromUrl,
-		hasDriveToken
-	} from '$lib/google-drive';
-	import { SHARE_IMPORT_PARAM, buildShareImportUrl, decodeShareImportUrl } from '$lib/share-import';
 
 	type TemplateModule = { default: unknown };
 	type ChecklistTemplate = {
@@ -58,14 +47,6 @@
 	let importInput = $state<HTMLInputElement>();
 	let importFeedback = $state('');
 	let copyFeedback = $state('');
-	let shareBusyChecklistId = $state('');
-	let pendingDriveImportUrl = $state('');
-	const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '';
-	const driveControlsDisabled = !googleClientId;
-
-	onMount(() => {
-		void importChecklistFromUrl();
-	});
 
 	function checklistUrl(checklist: Checklist): string {
 		const url = new SvelteURL(window.location.href);
@@ -81,50 +62,6 @@
 		copyFeedback = '';
 		await navigator.clipboard.writeText(checklistUrl(checklist));
 		copyFeedback = `Copied link for "${checklist.name}".`;
-	}
-
-	async function connectDrive(): Promise<void> {
-		importFeedback = '';
-		copyFeedback = '';
-		try {
-			await connectDriveSync(googleClientId);
-		} catch (error) {
-			importFeedback = error instanceof Error ? error.message : 'Google Drive connection failed.';
-		}
-	}
-
-	async function syncNow(): Promise<void> {
-		importFeedback = '';
-		copyFeedback = '';
-		try {
-			await syncDriveNow(googleClientId);
-		} catch (error) {
-			importFeedback = error instanceof Error ? error.message : 'Google Drive sync failed.';
-		}
-	}
-
-	async function shareChecklistTemplate(checklist: Checklist): Promise<void> {
-		importFeedback = '';
-		copyFeedback = '';
-		shareBusyChecklistId = checklist.id;
-
-		try {
-			if (!hasDriveToken()) {
-				await connectDriveSync(googleClientId);
-			}
-
-			const file = await createPublicDriveJsonFile(
-				`${filenameSlug(checklist.name)}-checklist-template.json`,
-				exportPortableChecklist(checklist)
-			);
-			const importUrl = buildShareImportUrl(file.publicUrl, window.location.href);
-			await navigator.clipboard.writeText(importUrl);
-			copyFeedback = `Copied share template link for "${checklist.name}".`;
-		} catch (error) {
-			importFeedback = error instanceof Error ? error.message : 'Share template failed.';
-		} finally {
-			shareBusyChecklistId = '';
-		}
 	}
 
 	function exportDefinition(checklist: Checklist): void {
@@ -158,104 +95,6 @@
 		}
 
 		addImportedChecklist(result.checklist);
-	}
-
-	async function importChecklistFromUrl(): Promise<void> {
-		const url = new URL(window.location.href);
-		const encodedImportUrl = url.searchParams.get(SHARE_IMPORT_PARAM);
-		if (!encodedImportUrl) return;
-
-		const decoded = decodeShareImportUrl(encodedImportUrl);
-		if (!decoded.ok) {
-			importFeedback = decoded.error;
-			return;
-		}
-
-		pendingDriveImportUrl = '';
-		const driveFileId = driveFileIdFromUrl(decoded.url);
-
-		try {
-			await importChecklistPayload(await loadSharedChecklistPayload(decoded.url, false));
-			clearImportParam();
-		} catch (error) {
-			if (driveFileId && googleClientId) {
-				pendingDriveImportUrl = decoded.url;
-				importFeedback = `${importErrorMessage(error)} Try limited Drive import, or download it and use Import.`;
-				return;
-			}
-
-			importFeedback = importErrorMessage(error);
-		}
-	}
-
-	async function importPendingDriveTemplate(): Promise<void> {
-		if (!pendingDriveImportUrl) return;
-
-		try {
-			importFeedback = 'Authorizing Google Drive...';
-			await authorizeDrive(googleClientId);
-			await importChecklistPayload(await loadSharedChecklistPayload(pendingDriveImportUrl, true));
-			pendingDriveImportUrl = '';
-			clearImportParam();
-		} catch (error) {
-			importFeedback = `Limited Drive import failed: ${importErrorMessage(error)} Download the file and use Import.`;
-		}
-	}
-
-	async function loadSharedChecklistPayload(
-		fileUrl: string,
-		useDriveApi: boolean
-	): Promise<unknown> {
-		if (useDriveApi) {
-			const driveFileId = driveFileIdFromUrl(fileUrl);
-			if (!driveFileId) throw new Error('Import URL is not a supported Google Drive file URL.');
-			return downloadDriveJsonFile(driveFileId);
-		}
-
-		let response: Response;
-		try {
-			response = await fetch(fileUrl);
-		} catch {
-			throw new Error('The browser blocked reading this download URL directly.');
-		}
-
-		if (!response.ok) {
-			throw new Error(`Import file could not be loaded (${response.status}).`);
-		}
-
-		const text = await (await response.blob()).text();
-		try {
-			return JSON.parse(text) as unknown;
-		} catch {
-			throw new Error(`Downloaded file is not valid JSON${downloadSnippet(text)}.`);
-		}
-	}
-
-	async function importChecklistPayload(payload: unknown): Promise<void> {
-		const result = importPortableChecklists(JSON.stringify(payload));
-		if (!result.ok) {
-			throw new Error(result.error);
-		}
-
-		addImportedChecklist(result.checklist);
-	}
-
-	function clearImportParam(): void {
-		const url = new URL(window.location.href);
-		url.searchParams.delete(SHARE_IMPORT_PARAM);
-		window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
-	}
-
-	function importErrorMessage(error: unknown): string {
-		return error instanceof Error ? error.message : 'Import file is unreachable or is not JSON.';
-	}
-
-	function downloadSnippet(text: string): string {
-		const trimmed = text.trim().replace(/\s+/g, ' ');
-		if (!trimmed) return '';
-
-		const snippet = trimmed.slice(0, 80);
-		return `; received "${snippet}${trimmed.length > snippet.length ? '...' : ''}"`;
 	}
 
 	function createChecklist(): void {
@@ -411,60 +250,11 @@
 		trail={headerActions}
 	/>
 
-	<section
-		class="flex flex-col gap-3 rounded-container border border-surface-800 bg-surface-900 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-	>
-		<div class="min-w-0">
-			<h2 class="text-sm font-semibold text-surface-100">Google Drive sync</h2>
-			<p class="mt-1 text-sm text-surface-400">
-				{#if driveControlsDisabled}
-					Set VITE_GOOGLE_CLIENT_ID to enable browser-only Drive sync and share links.
-				{:else}
-					{appStateStorage.drive.message ||
-						'Connect Google Drive to sync app state and share templates.'}
-				{/if}
-			</p>
-		</div>
-		<div class="flex flex-wrap gap-2 sm:justify-end">
-			<button
-				class="btn btn-sm preset-tonal-surface"
-				type="button"
-				disabled={driveControlsDisabled || appStateStorage.drive.status === 'syncing'}
-				onclick={connectDrive}
-			>
-				<Cloud size={16} aria-hidden="true" />
-				{appStateStorage.drive.status === 'connected' ? 'Reconnect' : 'Connect'}
-			</button>
-			<button
-				class="btn btn-sm preset-filled-primary-500"
-				type="button"
-				disabled={driveControlsDisabled || appStateStorage.drive.status === 'syncing'}
-				onclick={syncNow}
-			>
-				<RotateCcw size={16} aria-hidden="true" />
-				Sync now
-			</button>
-		</div>
-	</section>
-
 	{#if importFeedback || copyFeedback}
 		<div
 			class="rounded-base border border-surface-800 bg-surface-900 px-3 py-2 text-sm text-surface-300"
 		>
-			<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-				<span>{importFeedback || copyFeedback}</span>
-				{#if pendingDriveImportUrl}
-					<button
-						class="btn btn-sm preset-filled-primary-500"
-						type="button"
-						disabled={driveControlsDisabled}
-						onclick={importPendingDriveTemplate}
-					>
-						<Upload size={16} aria-hidden="true" />
-						Import shared template
-					</button>
-				{/if}
-			</div>
+			<span>{importFeedback || copyFeedback}</span>
 		</div>
 	{/if}
 
@@ -539,16 +329,6 @@
 										onclick={() => exportDefinition(checklist)}
 									>
 										<Download size={16} aria-hidden="true" />
-									</button>
-									<button
-										class="btn-icon btn-icon-sm preset-tonal-surface"
-										type="button"
-										title="Share template"
-										aria-label="Share template"
-										disabled={driveControlsDisabled || shareBusyChecklistId === checklist.id}
-										onclick={() => shareChecklistTemplate(checklist)}
-									>
-										<Share2 size={16} aria-hidden="true" />
 									</button>
 									<button
 										class="btn-icon btn-icon-sm preset-tonal-surface"
