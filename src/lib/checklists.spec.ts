@@ -13,6 +13,7 @@ import {
 } from './date-time';
 import {
 	STORAGE_KEY,
+	bankedTaskStatus,
 	createEmptyAppState,
 	exportPortableChecklist,
 	importPortableChecklists,
@@ -22,6 +23,8 @@ import {
 	moveArrayItem,
 	normalizeSchedule,
 	saveAppState,
+	taskIsDone,
+	taskRemainingCount,
 	uniqueLinkKey
 } from './checklists';
 import { driveFileIdFromUrl } from './google-drive';
@@ -329,6 +332,53 @@ describe('reorder helpers', () => {
 
 		expect(insertArrayItem(items, 'b', 1)).toEqual(['a', 'b', 'c']);
 		expect(insertArrayItem(items, 'b', 2)).toEqual(['a', 'c', 'b']);
+	});
+});
+
+describe('task counters', () => {
+	const schedule: RecurringSchedule = {
+		frequency: 'daily',
+		anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+	};
+	const task = {
+		id: 'task-1',
+		title: 'Elite Hunt',
+		repeatCount: 2,
+		maxCarryover: 6
+	};
+
+	it('shows carryover counters as attempts remaining', () => {
+		const now = new Date('2026-06-24T06:00:00.000Z');
+
+		expect(taskRemainingCount(task, schedule, undefined, now)).toBe(6);
+		expect(taskIsDone(task, schedule, undefined, now)).toBe(false);
+	});
+
+	it('accrues repeat count after a depleted carryover bank', () => {
+		const nextDay = new Date('2026-06-25T06:00:00.000Z');
+		const record = {
+			availableCount: 0,
+			lastAccruedAt: '2026-06-24T05:00:00.000Z'
+		};
+
+		expect(bankedTaskStatus(task, schedule, record, nextDay)).toMatchObject({
+			available: 2,
+			capacity: 6,
+			lastAccruedAt: '2026-06-25T05:00:00.000Z'
+		});
+		expect(taskRemainingCount(task, schedule, record, nextDay)).toBe(2);
+		expect(taskIsDone(task, schedule, record, nextDay)).toBe(false);
+	});
+
+	it('marks carryover tasks complete when no attempts remain', () => {
+		const now = new Date('2026-06-24T06:00:00.000Z');
+		const record = {
+			availableCount: 0,
+			lastAccruedAt: '2026-06-24T05:00:00.000Z'
+		};
+
+		expect(taskRemainingCount(task, schedule, record, now)).toBe(0);
+		expect(taskIsDone(task, schedule, record, now)).toBe(true);
 	});
 });
 

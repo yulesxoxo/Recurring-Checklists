@@ -7,17 +7,25 @@
 		RecurringSchedule
 	} from '$lib/checklists';
 	import {
-		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
 		formatWeekdayList,
 		getNextReset,
-		getResetWindowStart,
 		intervalCompletionExpiresAt,
 		scheduleAvailability,
 		scheduleResetTimeUtc,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
+	import {
+		appendCompletion,
+		bankedTaskStatus,
+		taskCompletionCount,
+		taskCounterCapacity,
+		taskHasCarryover,
+		taskIsDone as isTaskDone,
+		taskRemainingCount,
+		taskRepeatCount
+	} from '$lib/checklists/progress';
 
 	let {
 		checklistId,
@@ -32,12 +40,6 @@
 		now: Date;
 		hideCompleted: boolean;
 	} = $props();
-
-	type BankedTaskStatus = {
-		available: number;
-		capacity: number;
-		lastAccruedAt?: string;
-	};
 
 	let schedule = $derived(task.schedule ?? section.defaultSchedule);
 	let completion = $derived(appState.completions[checklistId]?.[section.id]?.[task.id]);
@@ -92,8 +94,8 @@
 		appState.completions[checklistId] ??= {};
 		appState.completions[checklistId][section.id] ??= {};
 
-		if (taskHasCarryover()) {
-			const status = bankedTaskStatus(record);
+		if (taskHasCarryover(task)) {
+			const status = bankedTaskStatus(task, schedule, record, now);
 			if (status.available <= 0) return;
 
 			appState.completions[checklistId][section.id][task.id] = {
@@ -104,8 +106,8 @@
 				lastAccruedAt: status.lastAccruedAt
 			};
 		} else {
-			const completionCount = taskCompletionCount(record);
-			if (completionCount >= taskRepeatCount()) return;
+			const completionCount = taskCompletionCount(schedule, record, now);
+			if (completionCount >= taskRepeatCount(task)) return;
 
 			appState.completions[checklistId][section.id][task.id] = {
 				completedAt,
@@ -125,9 +127,7 @@
 	}
 
 	function taskIsDone(): boolean {
-		if (taskHasCarryover()) return bankedTaskStatus(completion).available <= 0;
-
-		return taskCompletionCount(completion) >= taskRepeatCount();
+		return isTaskDone(task, schedule, completion, now);
 	}
 
 	function taskRowClass(): string {
@@ -151,108 +151,11 @@
 	}
 
 	function taskUnitStatus(): string {
-		if (taskHasCarryover()) {
-			const status = bankedTaskStatus(completion);
-			const done = bankedCompletionCount(status, completion);
-			return `${done}/${status.capacity}`;
-		}
-
-		return `${taskCompletionCount(completion)}/${taskRepeatCount()}`;
+		return `${taskRemainingCount(task, schedule, completion, now)}/${taskCounterCapacity(task)}`;
 	}
 
 	function taskUsesUnitControls(): boolean {
-		return taskRepeatCount() > 1 || taskHasCarryover();
-	}
-
-	function taskRepeatCount(): number {
-		return positiveInteger(task.repeatCount);
-	}
-
-	function taskCarryoverCapacity(): number {
-		return Math.max(taskRepeatCount(), positiveInteger(task.maxCarryover));
-	}
-
-	function taskHasCarryover(): boolean {
-		return taskCarryoverCapacity() > taskRepeatCount();
-	}
-
-	function positiveInteger(value: number | undefined): number {
-		return Math.max(1, Math.floor(value ?? 1));
-	}
-
-	function taskCompletionCount(record: CompletionRecord | undefined): number {
-		return completionLog(record).filter((completedAt) => completionCountsForSchedule(completedAt))
-			.length;
-	}
-
-	function completionCountsForSchedule(completedAtValue: string): boolean {
-		const completedAt = new Date(completedAtValue);
-		if (Number.isNaN(completedAt.getTime())) return false;
-
-		if (schedule.frequency === 'interval' && schedule.intervalMode === 'completion') {
-			const expiresAt = intervalCompletionExpiresAt(schedule, completedAt);
-			return expiresAt !== null && expiresAt > now;
-		}
-
-		const windowStart = getResetWindowStart(schedule, now);
-		return windowStart !== null && completedAt >= windowStart;
-	}
-
-	function completionLog(record: CompletionRecord | undefined): string[] {
-		if (!record) return [];
-
-		const values = Array.isArray(record.completionLog) ? record.completionLog : [];
-		const log = values.filter((value) => typeof value === 'string');
-		if (record.completedAt && log.length === 0) return [record.completedAt];
-
-		return log;
-	}
-
-	function appendCompletion(record: CompletionRecord | undefined, completedAt: string): string[] {
-		return [...completionLog(record), completedAt].slice(-100);
-	}
-
-	function bankedTaskStatus(record: CompletionRecord | undefined): BankedTaskStatus {
-		const repeatCount = taskRepeatCount();
-		const capacity = taskCarryoverCapacity();
-		const windowStart = getResetWindowStart(schedule, now);
-		const lastAccruedAt = record?.lastAccruedAt ?? windowStart?.toISOString();
-		let available =
-			typeof record?.availableCount === 'number' && Number.isFinite(record.availableCount)
-				? Math.max(0, Math.floor(record.availableCount))
-				: capacity;
-
-		if (!windowStart || !lastAccruedAt) {
-			return {
-				available: Math.min(capacity, available),
-				capacity,
-				lastAccruedAt
-			};
-		}
-
-		const elapsedWindows = countAvailableResetWindowsSince(schedule, lastAccruedAt, windowStart);
-		available = Math.min(capacity, available + elapsedWindows * repeatCount);
-
-		return {
-			available,
-			capacity,
-			lastAccruedAt: windowStart.toISOString()
-		};
-	}
-
-	function bankedCompletionCount(
-		status: BankedTaskStatus,
-		record: CompletionRecord | undefined
-	): number {
-		if (!status.lastAccruedAt) return completionLog(record).length;
-
-		const accruedAt = new Date(status.lastAccruedAt);
-		if (Number.isNaN(accruedAt.getTime())) return 0;
-
-		return completionLog(record).filter((completedAt) => {
-			const date = new Date(completedAt);
-			return !Number.isNaN(date.getTime()) && date >= accruedAt;
-		}).length;
+		return taskRepeatCount(task) > 1 || taskHasCarryover(task);
 	}
 
 	function customScheduleText(): string | undefined {

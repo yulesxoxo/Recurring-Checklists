@@ -12,17 +12,15 @@
 		countTasks
 	} from '$lib/checklists';
 	import {
-		countAvailableResetWindowsSince,
 		describeSchedule,
 		formatLocalReset,
 		formatWeekdayList,
 		getNextReset,
-		getResetWindowStart,
-		intervalCompletionExpiresAt,
 		scheduleAvailability,
 		scheduleResetTimeUtc,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
+	import { taskIsDone as isTaskDone } from '$lib/checklists/progress';
 
 	let {
 		checklist,
@@ -32,22 +30,11 @@
 		now: Date;
 	} = $props();
 
-	type BankedTaskStatus = {
-		available: number;
-		capacity: number;
-		lastAccruedAt?: string;
-	};
-
 	let hideCompletedTasks = $state(true);
 
 	function taskIsDone(section: ChecklistSection, task: ChecklistTask): boolean {
 		const record = getCompletion(checklist.id, section.id, task.id);
-		if (taskHasCarryover(task)) return bankedTaskStatus(section, task, record).available <= 0;
-
-		return (
-			taskCompletionCount(effectiveTaskSchedule(section, task), record, now) >=
-			taskRepeatCount(task)
-		);
+		return isTaskDone(task, effectiveTaskSchedule(section, task), record, now);
 	}
 
 	function getCompletion(
@@ -141,92 +128,6 @@
 		return localWindow === utcWindow.replace(' UTC', '')
 			? utcWindow
 			: `${localWindow} / ${utcWindow}`;
-	}
-
-	function taskRepeatCount(task: ChecklistTask): number {
-		return positiveInteger(task.repeatCount);
-	}
-
-	function taskCarryoverCapacity(task: ChecklistTask): number {
-		return Math.max(taskRepeatCount(task), positiveInteger(task.maxCarryover));
-	}
-
-	function taskHasCarryover(task: ChecklistTask): boolean {
-		return taskCarryoverCapacity(task) > taskRepeatCount(task);
-	}
-
-	function positiveInteger(value: number | undefined): number {
-		return Math.max(1, Math.floor(value ?? 1));
-	}
-
-	function taskCompletionCount(
-		schedule: RecurringSchedule,
-		record: CompletionRecord | undefined,
-		reference: Date
-	): number {
-		return completionLog(record).filter((completedAt) =>
-			completionCountsForSchedule(schedule, completedAt, reference)
-		).length;
-	}
-
-	function completionCountsForSchedule(
-		schedule: RecurringSchedule,
-		completedAtValue: string,
-		reference: Date
-	): boolean {
-		const completedAt = new Date(completedAtValue);
-		if (Number.isNaN(completedAt.getTime())) return false;
-
-		if (schedule.frequency === 'interval' && schedule.intervalMode === 'completion') {
-			const expiresAt = intervalCompletionExpiresAt(schedule, completedAt);
-			return expiresAt !== null && expiresAt > reference;
-		}
-
-		const windowStart = getResetWindowStart(schedule, reference);
-		return windowStart !== null && completedAt >= windowStart;
-	}
-
-	function completionLog(record: CompletionRecord | undefined): string[] {
-		if (!record) return [];
-
-		const values = Array.isArray(record.completionLog) ? record.completionLog : [];
-		const log = values.filter((value) => typeof value === 'string');
-		if (record.completedAt && log.length === 0) return [record.completedAt];
-
-		return log;
-	}
-
-	function bankedTaskStatus(
-		section: ChecklistSection,
-		task: ChecklistTask,
-		record: CompletionRecord | undefined
-	): BankedTaskStatus {
-		const schedule = effectiveTaskSchedule(section, task);
-		const repeatCount = taskRepeatCount(task);
-		const capacity = taskCarryoverCapacity(task);
-		const windowStart = getResetWindowStart(schedule, now);
-		const lastAccruedAt = record?.lastAccruedAt ?? windowStart?.toISOString();
-		let available =
-			typeof record?.availableCount === 'number' && Number.isFinite(record.availableCount)
-				? Math.max(0, Math.floor(record.availableCount))
-				: capacity;
-
-		if (!windowStart || !lastAccruedAt) {
-			return {
-				available: Math.min(capacity, available),
-				capacity,
-				lastAccruedAt
-			};
-		}
-
-		const elapsedWindows = countAvailableResetWindowsSince(schedule, lastAccruedAt, windowStart);
-		available = Math.min(capacity, available + elapsedWindows * repeatCount);
-
-		return {
-			available,
-			capacity,
-			lastAccruedAt: windowStart.toISOString()
-		};
 	}
 
 	function updateHideCompleted(details: { checked: boolean }): void {
