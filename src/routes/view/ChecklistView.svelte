@@ -17,7 +17,9 @@
 		formatWeekdayList,
 		getNextReset,
 		scheduleAvailability,
-		scheduleResetTimeUtc,
+		scheduleResetTime,
+		scheduleTimeBasis,
+		localTimeToUtcTime,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
 	import { taskIsDone as isTaskDone } from '$lib/checklists/progress';
@@ -82,9 +84,7 @@
 	function describeViewSchedule(schedule: RecurringSchedule, reference: Date): string {
 		if (schedule.frequency === 'interval') return describeSchedule(schedule);
 
-		const utcTime = scheduleResetTimeUtc(schedule);
-		const localTime = utcTimeToLocalTime(utcTime, reference);
-		const resetTime = `${localTime} local / ${utcTime} UTC`;
+		const resetTime = describeResetTime(schedule, reference);
 
 		switch (schedule.frequency) {
 			case 'daily':
@@ -105,7 +105,7 @@
 			...(schedule.availableWeekdays?.length
 				? [formatWeekdayList(schedule.availableWeekdays)]
 				: []),
-			...(schedule.availableStartTimeUtc && schedule.availableEndTimeUtc
+			...(schedule.availableStartTime && schedule.availableEndTime
 				? [describeAvailabilityTimeWindow(schedule, reference)]
 				: [])
 		];
@@ -118,16 +118,31 @@
 		scheduleValue: RecurringSchedule,
 		reference: Date
 	): string {
-		if (!scheduleValue.availableStartTimeUtc || !scheduleValue.availableEndTimeUtc) return '';
+		if (!scheduleValue.availableStartTime || !scheduleValue.availableEndTime) return '';
 
-		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTimeUtc, reference);
-		const localEnd = utcTimeToLocalTime(scheduleValue.availableEndTimeUtc, reference);
-		const utcWindow = `${scheduleValue.availableStartTimeUtc} - ${scheduleValue.availableEndTimeUtc} UTC`;
+		if (scheduleTimeBasis(scheduleValue) === 'local') {
+			const utcStart = localTimeToUtcTime(scheduleValue.availableStartTime, reference);
+			const utcEnd = localTimeToUtcTime(scheduleValue.availableEndTime, reference);
+			return `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} local / ${utcStart} - ${utcEnd} UTC`;
+		}
+
+		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTime, reference);
+		const localEnd = utcTimeToLocalTime(scheduleValue.availableEndTime, reference);
+		const utcWindow = `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} UTC`;
 		const localWindow = `${localStart} - ${localEnd} local`;
 
 		return localWindow === utcWindow.replace(' UTC', '')
 			? utcWindow
 			: `${localWindow} / ${utcWindow}`;
+	}
+
+	function describeResetTime(scheduleValue: RecurringSchedule, reference: Date): string {
+		const time = scheduleResetTime(scheduleValue);
+		if (scheduleTimeBasis(scheduleValue) === 'local') {
+			return `${time} local / ${localTimeToUtcTime(time, reference)} UTC`;
+		}
+
+		return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
 	}
 
 	function updateHideCompleted(details: { checked: boolean }): void {

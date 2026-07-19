@@ -15,6 +15,7 @@
 		type ChecklistTask,
 		type Frequency,
 		type RecurringSchedule,
+		type ScheduleTimeBasis,
 		type Weekday,
 		allFrequencies,
 		insertArrayItem,
@@ -27,17 +28,17 @@
 		weekdays
 	} from '$lib/checklists';
 	import {
-		type ScheduleTimeMode,
 		alignDateToWeekday,
 		describeSchedule,
 		formatLocalReset,
 		formatUtcReset,
 		getNextReset,
 		getResetWindowStart,
-		scheduleInputTime,
-		scheduleInputTimeToUtc,
-		scheduleResetTimeUtc,
+		scheduleResetTime,
+		scheduleTimeBasis,
 		todayUtc,
+		utcTimeToLocalTime,
+		localTimeToUtcTime,
 		utcDateTimeToInputValue
 	} from '$lib/date-time';
 	import { createId } from '$lib/id';
@@ -52,7 +53,6 @@
 	let editingErrors = $state<EditingErrors>({});
 	let checklistNotFound = $state(false);
 	let now = $state(new Date());
-	let scheduleTimeModes = $state<Record<string, ScheduleTimeMode>>({});
 	let editChecklistId = $state<string | null>(null);
 	let editorReady = $state(false);
 
@@ -114,7 +114,8 @@
 				name: section.name.trim() || 'Untitled section',
 				defaultSchedule: normalizeSchedule(section.defaultSchedule) ?? {
 					frequency: 'daily',
-					anchorDateTimeUtc: `${todayUtc()}T05:00:00.000Z`
+					timeBasis: 'utc',
+					resetTime: '05:00'
 				},
 				tasks: section.tasks.map((task) => ({
 					...task,
@@ -171,8 +172,11 @@
 	function replaceSchedule(schedule: RecurringSchedule, next: RecurringSchedule): void {
 		delete schedule.resetWeekday;
 		delete schedule.availableWeekdays;
-		delete schedule.availableStartTimeUtc;
-		delete schedule.availableEndTimeUtc;
+		delete schedule.availableStartTime;
+		delete schedule.availableEndTime;
+		delete schedule.timeBasis;
+		delete schedule.resetTime;
+		delete schedule.anchorDate;
 		delete schedule.anchorDateTimeUtc;
 		delete schedule.intervalMinutes;
 		delete schedule.intervalMode;
@@ -187,14 +191,19 @@
 					frequency,
 					resetWeekday: frequency === 'weekly' || frequency === 'biweekly' ? 'monday' : undefined,
 					availableWeekdays: frequency === 'daily' ? schedule.availableWeekdays : undefined,
-					availableStartTimeUtc: frequency === 'daily' ? schedule.availableStartTimeUtc : undefined,
-					availableEndTimeUtc: frequency === 'daily' ? schedule.availableEndTimeUtc : undefined,
-					anchorDateTimeUtc:
+					availableStartTime: frequency === 'daily' ? schedule.availableStartTime : undefined,
+					availableEndTime: frequency === 'daily' ? schedule.availableEndTime : undefined,
+					timeBasis: frequency === 'interval' ? undefined : scheduleTimeBasis(schedule),
+					resetTime: frequency === 'interval' ? undefined : scheduleResetTime(schedule),
+					anchorDate:
 						frequency === 'biweekly'
-							? (schedule.anchorDateTimeUtc ?? `${todayUtc()}T05:00:00.000Z`)
-							: frequency === 'interval'
-								? (schedule.anchorDateTimeUtc ?? new Date().toISOString())
-								: undefined,
+							? (schedule.anchorDate ??
+								alignDateToWeekday(todayUtc(), 'monday', scheduleTimeBasis(schedule)))
+							: undefined,
+					anchorDateTimeUtc:
+						frequency === 'interval'
+							? (schedule.anchorDateTimeUtc ?? new Date().toISOString())
+							: undefined,
 					intervalMinutes: frequency === 'interval' ? (schedule.intervalMinutes ?? 60) : undefined,
 					intervalMode: frequency === 'interval' ? (schedule.intervalMode ?? 'anchor') : undefined
 				},
@@ -206,11 +215,24 @@
 	function updateResetWeekday(schedule: RecurringSchedule, resetWeekday: Weekday): void {
 		schedule.resetWeekday = resetWeekday;
 		if (schedule.frequency === 'biweekly') {
-			schedule.anchorDateTimeUtc = biweeklyAnchorDateTime(
-				schedule,
+			schedule.anchorDate = alignDateToWeekday(
 				biweeklyAnchorDate(schedule),
-				scheduleResetTimeUtc(schedule),
-				resetWeekday
+				resetWeekday,
+				scheduleTimeBasis(schedule)
+			);
+		}
+	}
+
+	function updateScheduleTimeBasis(
+		schedule: RecurringSchedule,
+		timeBasis: ScheduleTimeBasis
+	): void {
+		schedule.timeBasis = timeBasis;
+		if (schedule.frequency === 'biweekly') {
+			schedule.anchorDate = alignDateToWeekday(
+				biweeklyAnchorDate(schedule),
+				schedule.resetWeekday ?? 'monday',
+				timeBasis
 			);
 		}
 	}
@@ -234,11 +256,11 @@
 
 	function updateAvailableTimeWindowEnabled(schedule: RecurringSchedule, enabled: boolean): void {
 		if (enabled) {
-			schedule.availableStartTimeUtc = schedule.availableStartTimeUtc ?? '16:00';
-			schedule.availableEndTimeUtc = schedule.availableEndTimeUtc ?? '06:00';
+			schedule.availableStartTime = schedule.availableStartTime ?? '16:00';
+			schedule.availableEndTime = schedule.availableEndTime ?? '06:00';
 		} else {
-			delete schedule.availableStartTimeUtc;
-			delete schedule.availableEndTimeUtc;
+			delete schedule.availableStartTime;
+			delete schedule.availableEndTime;
 		}
 	}
 
@@ -248,27 +270,22 @@
 		time: string
 	): void {
 		if (part === 'start') {
-			schedule.availableStartTimeUtc = time;
+			schedule.availableStartTime = time;
 		} else {
-			schedule.availableEndTimeUtc = time;
+			schedule.availableEndTime = time;
 		}
 	}
 
 	function updateAnchorDate(schedule: RecurringSchedule, anchorDate: string): void {
-		schedule.anchorDateTimeUtc = biweeklyAnchorDateTime(schedule, anchorDate);
+		schedule.anchorDate = alignDateToWeekday(
+			anchorDate,
+			schedule.resetWeekday ?? 'monday',
+			scheduleTimeBasis(schedule)
+		);
 	}
 
 	function biweeklyAnchorDate(schedule: RecurringSchedule): string {
-		return schedule.anchorDateTimeUtc?.slice(0, 10) ?? todayUtc();
-	}
-
-	function biweeklyAnchorDateTime(
-		schedule: RecurringSchedule,
-		anchorDate: string,
-		resetTimeUtc = scheduleResetTimeUtc(schedule),
-		resetWeekday = schedule.resetWeekday ?? 'monday'
-	): string {
-		return `${alignDateToWeekday(anchorDate, resetWeekday)}T${resetTimeUtc}:00.000Z`;
+		return schedule.anchorDate ?? todayUtc();
 	}
 
 	function intervalHours(schedule: RecurringSchedule): number {
@@ -326,19 +343,21 @@
 			{
 				frequency,
 				resetWeekday,
-				anchorDateTimeUtc:
+				timeBasis: frequency === 'interval' ? undefined : 'utc',
+				resetTime: frequency === 'interval' ? undefined : '05:00',
+				anchorDate:
 					frequency === 'biweekly'
-						? `${alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')}T05:00:00.000Z`
-						: frequency === 'interval'
-							? new Date().toISOString()
-							: `${todayUtc()}T05:00:00.000Z`,
+						? alignDateToWeekday(todayUtc(), resetWeekday ?? 'monday')
+						: undefined,
+				anchorDateTimeUtc: frequency === 'interval' ? new Date().toISOString() : undefined,
 				intervalMinutes: frequency === 'interval' ? 60 : undefined,
 				intervalMode: frequency === 'interval' ? 'anchor' : undefined
 			},
 			{}
 		) ?? {
 			frequency: 'daily',
-			anchorDateTimeUtc: `${todayUtc()}T05:00:00.000Z`
+			timeBasis: 'utc',
+			resetTime: '05:00'
 		};
 
 		return {
@@ -409,32 +428,8 @@
 		return alignDateToWeekday('1970-01-01', weekday);
 	}
 
-	function scheduleTimeMode(scheduleKey: string): ScheduleTimeMode {
-		return scheduleTimeModes[scheduleKey] ?? 'utc';
-	}
-
-	function updateEditorScheduleTimeMode(scheduleKey: string, timeMode: ScheduleTimeMode): void {
-		scheduleTimeModes = {
-			...scheduleTimeModes,
-			[scheduleKey]: timeMode
-		};
-	}
-
-	function updateScheduleInputTime(
-		schedule: RecurringSchedule,
-		scheduleKey: string,
-		time: string
-	): void {
-		const resetTimeUtc = scheduleInputTimeToUtc(time, scheduleTimeMode(scheduleKey), now);
-		schedule.anchorDateTimeUtc = scheduleAnchorDateTime(schedule, resetTimeUtc);
-	}
-
-	function scheduleAnchorDateTime(schedule: RecurringSchedule, resetTimeUtc: string): string {
-		if (schedule.frequency === 'biweekly') {
-			return biweeklyAnchorDateTime(schedule, biweeklyAnchorDate(schedule), resetTimeUtc);
-		}
-
-		return `${schedule.anchorDateTimeUtc?.slice(0, 10) ?? todayUtc()}T${resetTimeUtc}:00.000Z`;
+	function updateScheduleInputTime(schedule: RecurringSchedule, time: string): void {
+		schedule.resetTime = time;
 	}
 
 	function intervalAnchorDate(schedule: RecurringSchedule): string {
@@ -482,9 +477,22 @@
 			delete task.maxCarryover;
 		}
 	}
+
+	function resetTimeSummary(schedule: RecurringSchedule): string {
+		const time = scheduleResetTime(schedule);
+		if (scheduleTimeBasis(schedule) === 'local') {
+			return `Local ${time} / UTC ${localTimeToUtcTime(time, now)}`;
+		}
+
+		return `UTC ${time} / Local ${utcTimeToLocalTime(time, now)}`;
+	}
+
+	function scheduleBasisLabel(schedule: RecurringSchedule): string {
+		return scheduleTimeBasis(schedule) === 'local' ? 'local time' : 'UTC time';
+	}
 </script>
 
-{#snippet scheduleEditor(schedule: RecurringSchedule, scheduleKey: string)}
+{#snippet scheduleEditor(schedule: RecurringSchedule)}
 	<div class={`grid gap-3 ${schedule.frequency === 'interval' ? '' : 'sm:grid-cols-2'}`}>
 		<label class="label">
 			<span class="label-text">Frequency</span>
@@ -501,41 +509,39 @@
 
 		{#if schedule.frequency !== 'interval'}
 			<div class="label">
-				<span class="label-text">Reset time</span>
+				<span class="label-text">Schedule basis</span>
 				<div class="grid grid-cols-2 overflow-hidden rounded-base border border-surface-700">
 					<button
 						class={`btn btn-sm rounded-none ${
-							scheduleTimeMode(scheduleKey) === 'local'
+							scheduleTimeBasis(schedule) === 'local'
 								? 'preset-filled-primary-500'
 								: 'preset-tonal-surface'
 						}`}
 						type="button"
-						onclick={() => updateEditorScheduleTimeMode(scheduleKey, 'local')}
+						onclick={() => updateScheduleTimeBasis(schedule, 'local')}
 					>
 						Local time
 					</button>
 					<button
 						class={`btn btn-sm rounded-none ${
-							scheduleTimeMode(scheduleKey) === 'utc'
+							scheduleTimeBasis(schedule) === 'utc'
 								? 'preset-filled-primary-500'
 								: 'preset-tonal-surface'
 						}`}
 						type="button"
-						onclick={() => updateEditorScheduleTimeMode(scheduleKey, 'utc')}
+						onclick={() => updateScheduleTimeBasis(schedule, 'utc')}
 					>
 						UTC
 					</button>
 				</div>
+				<span class="label-text mt-3">Reset time ({scheduleBasisLabel(schedule)})</span>
 				<input
 					class="input"
 					type="time"
-					value={scheduleInputTime(schedule, now, scheduleTimeMode(scheduleKey))}
-					onchange={(event) =>
-						updateScheduleInputTime(schedule, scheduleKey, event.currentTarget.value)}
+					value={scheduleResetTime(schedule)}
+					onchange={(event) => updateScheduleInputTime(schedule, event.currentTarget.value)}
 				/>
-				<span class="text-xs text-surface-400">
-					Local {scheduleInputTime(schedule, now, 'local')} / UTC {scheduleResetTimeUtc(schedule)}
-				</span>
+				<span class="text-xs text-surface-400">{resetTimeSummary(schedule)}</span>
 			</div>
 		{/if}
 	</div>
@@ -654,31 +660,31 @@
 					<input
 						class="checkbox"
 						type="checkbox"
-						checked={Boolean(schedule.availableStartTimeUtc && schedule.availableEndTimeUtc)}
+						checked={Boolean(schedule.availableStartTime && schedule.availableEndTime)}
 						onchange={(event) =>
 							updateAvailableTimeWindowEnabled(schedule, event.currentTarget.checked)}
 					/>
-					<span>Limit by time UTC</span>
+					<span>Limit by {scheduleBasisLabel(schedule)}</span>
 				</label>
 
-				{#if schedule.availableStartTimeUtc && schedule.availableEndTimeUtc}
+				{#if schedule.availableStartTime && schedule.availableEndTime}
 					<div class="mt-3 grid gap-3 sm:grid-cols-2">
 						<label class="label">
-							<span class="label-text">Available from UTC</span>
+							<span class="label-text">Available from ({scheduleBasisLabel(schedule)})</span>
 							<input
 								class="input"
 								type="time"
-								value={schedule.availableStartTimeUtc}
+								value={schedule.availableStartTime}
 								onchange={(event) =>
 									updateAvailableTimeWindow(schedule, 'start', event.currentTarget.value)}
 							/>
 						</label>
 						<label class="label">
-							<span class="label-text">Available until UTC</span>
+							<span class="label-text">Available until ({scheduleBasisLabel(schedule)})</span>
 							<input
 								class="input"
 								type="time"
-								value={schedule.availableEndTimeUtc}
+								value={schedule.availableEndTime}
 								onchange={(event) =>
 									updateAvailableTimeWindow(schedule, 'end', event.currentTarget.value)}
 							/>
@@ -847,7 +853,7 @@
 
 							<div class="rounded-base border border-surface-800 bg-surface-900 p-3">
 								<h4 class="mb-3 text-sm font-semibold text-surface-300">Default task schedule</h4>
-								{@render scheduleEditor(section.defaultSchedule, `${section.id}:default`)}
+								{@render scheduleEditor(section.defaultSchedule)}
 							</div>
 
 							<div class="mt-4">
@@ -948,7 +954,7 @@
 												</label>
 											</div>
 											{#if task.schedule}
-												{@render scheduleEditor(task.schedule, `${task.id}:schedule`)}
+												{@render scheduleEditor(task.schedule)}
 											{:else}
 												<p class="text-sm text-surface-400">
 													Uses section default: {describeSchedule(section.defaultSchedule)}

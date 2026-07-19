@@ -8,8 +8,7 @@ import {
 	intervalCompletionExpiresAt,
 	isScheduleAvailable,
 	localTimeToUtcTime,
-	scheduleAvailability,
-	scheduleInputTimeToUtc
+	scheduleAvailability
 } from './date-time';
 import {
 	STORAGE_KEY,
@@ -76,7 +75,8 @@ describe('checklist storage', () => {
 							name: 'Daily',
 							defaultSchedule: {
 								frequency: 'daily',
-								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+								timeBasis: 'utc',
+								resetTime: '05:00'
 							},
 							tasks: [
 								{
@@ -85,7 +85,8 @@ describe('checklist storage', () => {
 									notes: 'Escalate blockers',
 									schedule: {
 										frequency: 'daily',
-										anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+										timeBasis: 'utc',
+										resetTime: '05:00'
 									}
 								}
 							]
@@ -138,7 +139,8 @@ describe('checklist storage', () => {
 								name: 'Daily',
 								defaultSchedule: {
 									frequency: 'daily',
-									anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+									timeBasis: 'utc',
+									resetTime: '05:00'
 								},
 								tasks: []
 							}
@@ -158,7 +160,8 @@ describe('reset windows', () => {
 	it('uses the current daily window after the reset boundary', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+			timeBasis: 'utc',
+			resetTime: '05:00'
 		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T05:00:00.000Z'))?.toISOString()).toBe(
@@ -169,10 +172,43 @@ describe('reset windows', () => {
 		);
 	});
 
+	it('keeps local daily reset wall time across daylight saving changes', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'daily',
+			timeBasis: 'local',
+			resetTime: '09:00'
+		};
+		const before = getResetWindowStart(schedule, new Date(2026, 2, 28, 12));
+		const after = getResetWindowStart(schedule, new Date(2026, 2, 29, 12));
+
+		expect(before?.getHours()).toBe(9);
+		expect(after?.getHours()).toBe(9);
+		if (before && after && before.getTimezoneOffset() !== after.getTimezoneOffset()) {
+			expect(before.getUTCHours()).not.toBe(after.getUTCHours());
+		}
+	});
+
+	it('keeps UTC daily reset time across daylight saving changes', () => {
+		const schedule: RecurringSchedule = {
+			frequency: 'daily',
+			timeBasis: 'utc',
+			resetTime: '05:00'
+		};
+		const before = getResetWindowStart(schedule, new Date(2026, 2, 28, 12));
+		const after = getResetWindowStart(schedule, new Date(2026, 2, 29, 12));
+
+		expect(before?.getUTCHours()).toBe(5);
+		expect(after?.getUTCHours()).toBe(5);
+		if (before && after && before.getTimezoneOffset() !== after.getTimezoneOffset()) {
+			expect(before.getHours()).not.toBe(after.getHours());
+		}
+	});
+
 	it('marks restricted daily schedules available only on selected local weekdays', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-24T12:00:00.000Z',
+			timeBasis: 'local',
+			resetTime: '12:00',
 			availableWeekdays: ['friday', 'saturday', 'sunday']
 		};
 
@@ -183,7 +219,8 @@ describe('reset windows', () => {
 	it('uses selected weekdays for restricted daily reset boundaries', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
+			timeBasis: 'utc',
+			resetTime: '07:00',
 			availableWeekdays: ['monday']
 		};
 
@@ -198,9 +235,10 @@ describe('reset windows', () => {
 	it('tracks restricted daily time windows inside the reset window', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-26T07:00:00.000Z',
-			availableStartTimeUtc: '16:00',
-			availableEndTimeUtc: '06:00'
+			timeBasis: 'utc',
+			resetTime: '07:00',
+			availableStartTime: '16:00',
+			availableEndTime: '06:00'
 		};
 
 		const upcoming = scheduleAvailability(schedule, new Date('2026-06-26T08:00:00.000Z'));
@@ -222,7 +260,8 @@ describe('reset windows', () => {
 	it('counts reset windows only on selected daily weekdays', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+			timeBasis: 'utc',
+			resetTime: '05:00',
 			availableWeekdays: ['friday', 'saturday', 'sunday']
 		};
 
@@ -239,7 +278,8 @@ describe('reset windows', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'weekly',
 			resetWeekday: 'monday',
-			anchorDateTimeUtc: '2026-06-22T05:00:00.000Z'
+			timeBasis: 'utc',
+			resetTime: '05:00'
 		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:00:00.000Z'))?.toISOString()).toBe(
@@ -254,7 +294,9 @@ describe('reset windows', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'biweekly',
 			resetWeekday: 'monday',
-			anchorDateTimeUtc: '2026-06-08T05:00:00.000Z'
+			timeBasis: 'utc',
+			resetTime: '05:00',
+			anchorDate: '2026-06-08'
 		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:00:00.000Z'))?.toISOString()).toBe(
@@ -269,7 +311,9 @@ describe('reset windows', () => {
 		const schedule: RecurringSchedule = {
 			frequency: 'biweekly',
 			resetWeekday: 'tuesday',
-			anchorDateTimeUtc: '2026-06-08T05:00:00.000Z'
+			timeBasis: 'utc',
+			resetTime: '05:00',
+			anchorDate: '2026-06-08'
 		};
 
 		expect(getResetWindowStart(schedule, new Date('2026-06-24T12:00:00.000Z'))).toBeNull();
@@ -336,7 +380,8 @@ describe('reorder helpers', () => {
 describe('task counters', () => {
 	const schedule: RecurringSchedule = {
 		frequency: 'daily',
-		anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+		timeBasis: 'utc',
+		resetTime: '05:00'
 	};
 	const task = {
 		id: 'task-1',
@@ -391,9 +436,12 @@ describe('schedule normalization', () => {
 
 		expect(schedule).toEqual({
 			frequency: 'biweekly',
+			timeBasis: 'utc',
+			resetTime: '09:30',
 			resetWeekday: 'monday',
 			availableWeekdays: undefined,
-			anchorDateTimeUtc: '2026-06-22T09:30:00.000Z',
+			anchorDate: '2026-06-22',
+			anchorDateTimeUtc: undefined,
 			intervalMinutes: undefined,
 			intervalMode: undefined
 		});
@@ -410,8 +458,11 @@ describe('schedule normalization', () => {
 
 		expect(schedule).toEqual({
 			frequency: 'interval',
+			timeBasis: undefined,
+			resetTime: undefined,
 			resetWeekday: undefined,
 			availableWeekdays: undefined,
+			anchorDate: undefined,
 			anchorDateTimeUtc: undefined,
 			intervalMinutes: 135,
 			intervalMode: 'completion'
@@ -421,7 +472,8 @@ describe('schedule normalization', () => {
 	it('normalizes daily availability to unique weekdays only', () => {
 		const schedule = normalizeSchedule({
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+			timeBasis: 'utc',
+			resetTime: '05:00',
 			availableWeekdays: ['sunday', 'monday', 'friday', 'saturday', 'friday']
 		});
 
@@ -432,7 +484,8 @@ describe('schedule normalization', () => {
 		expect(
 			describeSchedule({
 				frequency: 'daily',
-				anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
+				timeBasis: 'utc',
+				resetTime: '07:00',
 				availableWeekdays: ['sunday', 'monday', 'friday', 'saturday']
 			})
 		).toBe('Available Monday, Friday - Sunday; resets at 07:00 UTC');
@@ -442,7 +495,8 @@ describe('schedule normalization', () => {
 		expect(
 			describeSchedule({
 				frequency: 'daily',
-				anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
+				timeBasis: 'utc',
+				resetTime: '07:00',
 				availableWeekdays: ['friday', 'saturday', 'sunday']
 			})
 		).toBe('Available Friday - Sunday; resets at 07:00 UTC');
@@ -452,9 +506,10 @@ describe('schedule normalization', () => {
 		expect(
 			describeSchedule({
 				frequency: 'daily',
-				anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
-				availableStartTimeUtc: '16:00',
-				availableEndTimeUtc: '06:00'
+				timeBasis: 'utc',
+				resetTime: '07:00',
+				availableStartTime: '16:00',
+				availableEndTime: '06:00'
 			})
 		).toBe('Available 16:00 - 06:00 UTC; resets at 07:00 UTC');
 	});
@@ -462,21 +517,23 @@ describe('schedule normalization', () => {
 	it('normalizes daily availability time windows', () => {
 		const schedule = normalizeSchedule({
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-24T07:00:00.000Z',
-			availableStartTimeUtc: '16:30',
-			availableEndTimeUtc: '06:15'
+			timeBasis: 'utc',
+			resetTime: '07:00',
+			availableStartTime: '16:30',
+			availableEndTime: '06:15'
 		});
 
 		expect(schedule).toMatchObject({
-			availableStartTimeUtc: '16:30',
-			availableEndTimeUtc: '06:15'
+			availableStartTime: '16:30',
+			availableEndTime: '06:15'
 		});
 	});
 
 	it('ignores availability when every daily weekday is selected', () => {
 		const schedule = normalizeSchedule({
 			frequency: 'daily',
-			anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+			timeBasis: 'utc',
+			resetTime: '05:00',
 			availableWeekdays: [
 				'sunday',
 				'monday',
@@ -536,7 +593,8 @@ describe('portable exports', () => {
 							name: 'Daily',
 							defaultSchedule: {
 								frequency: 'daily',
-								anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+								timeBasis: 'utc',
+								resetTime: '05:00'
 							},
 							tasks: [
 								{
@@ -545,7 +603,8 @@ describe('portable exports', () => {
 									notes: 'Escalate blockers',
 									schedule: {
 										frequency: 'daily',
-										anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+										timeBasis: 'utc',
+										resetTime: '05:00'
 									}
 								}
 							]
@@ -578,7 +637,8 @@ describe('portable exports', () => {
 						name: 'Daily',
 						defaultSchedule: {
 							frequency: 'daily',
-							anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+							timeBasis: 'utc',
+							resetTime: '05:00'
 						},
 						tasks: [
 							{
@@ -586,7 +646,8 @@ describe('portable exports', () => {
 								notes: 'Escalate blockers',
 								schedule: {
 									frequency: 'daily',
-									anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+									timeBasis: 'utc',
+									resetTime: '05:00'
 								}
 							}
 						]
@@ -607,7 +668,8 @@ describe('portable exports', () => {
 					name: 'Daily',
 					defaultSchedule: {
 						frequency: 'daily',
-						anchorDateTimeUtc: '2026-06-24T05:00:00.000Z'
+						timeBasis: 'utc',
+						resetTime: '05:00'
 					},
 					tasks: [
 						{
@@ -639,7 +701,8 @@ describe('portable exports', () => {
 					name: 'Weekend',
 					defaultSchedule: {
 						frequency: 'daily',
-						anchorDateTimeUtc: '2026-06-24T05:00:00.000Z',
+						timeBasis: 'utc',
+						resetTime: '05:00',
 						availableWeekdays: ['friday', 'saturday', 'sunday']
 					},
 					tasks: []
@@ -694,6 +757,14 @@ describe('portable imports', () => {
 		expect(result.checklist.linkKey).toBe('Ops');
 		expect(result.checklist.sections[0].id).toBe('section-new');
 		expect(result.checklist.sections[0].tasks[0].id).toBe('task-new');
+		expect(result.checklist.sections[0].defaultSchedule).toMatchObject({
+			timeBasis: 'utc',
+			resetTime: '05:00'
+		});
+		expect(result.checklist.sections[0].tasks[0].schedule).toMatchObject({
+			timeBasis: 'utc',
+			resetTime: '05:00'
+		});
 	});
 
 	it('allows imported tasks to use the section default schedule', () => {
@@ -781,6 +852,10 @@ describe('portable imports', () => {
 			'saturday',
 			'sunday'
 		]);
+		expect(result.checklist.sections[0].defaultSchedule).toMatchObject({
+			timeBasis: 'utc',
+			resetTime: '05:00'
+		});
 	});
 
 	it('rejects malformed schedules before import', () => {
@@ -865,6 +940,5 @@ describe('local time conversion', () => {
 			.padStart(2, '0')}`;
 
 		expect(localTimeToUtcTime('09:30', reference)).toBe(expected);
-		expect(scheduleInputTimeToUtc('09:30', 'local', reference)).toBe(expected);
 	});
 });

@@ -6,7 +6,6 @@ import {
 	normalizeUtcDateTimeInput,
 	parseUtcDateInput,
 	parseUtcDateTimeInput,
-	parseResetTime,
 	todayUtc
 } from '../date-time';
 import { createId } from '../id';
@@ -21,6 +20,7 @@ import type {
 	ImportPortableChecklistsResult,
 	PortableChecklistExport,
 	RecurringSchedule,
+	ScheduleTimeBasis,
 	Weekday
 } from './types';
 
@@ -32,7 +32,9 @@ export function normalizeSchedule(
 	if (!isRecord(value) || !isFrequency(value.frequency)) return null;
 
 	const frequency = value.frequency;
-	const resetTimeUtc = legacyResetTime(value);
+	const legacyTimeFields = normalizeLegacyScheduleTimeFields(value);
+	const timeBasis = normalizeScheduleTimeBasis(value.timeBasis);
+	const resetTime = scheduleResetTime(value, legacyTimeFields);
 	const resetWeekday =
 		frequency === 'weekly' || frequency === 'biweekly'
 			? isWeekday(value.resetWeekday)
@@ -43,22 +45,25 @@ export function normalizeSchedule(
 		frequency === 'daily' ? normalizeAvailableWeekdays(value.availableWeekdays) : undefined;
 	const availableTimeWindow =
 		frequency === 'daily'
-			? normalizeAvailableTimeWindow(value.availableStartTimeUtc, value.availableEndTimeUtc)
+			? normalizeAvailableTimeWindow(
+					value.availableStartTime ?? legacyTimeFields.availableStartTime,
+					value.availableEndTime ?? legacyTimeFields.availableEndTime
+				)
 			: {};
 	const intervalMode = value.intervalMode === 'completion' ? 'completion' : 'anchor';
 
 	return {
 		frequency,
+		timeBasis: frequency === 'interval' ? undefined : timeBasis,
+		resetTime: frequency === 'interval' ? undefined : resetTime,
 		resetWeekday,
 		availableWeekdays,
 		...availableTimeWindow,
-		anchorDateTimeUtc: normalizeScheduleAnchorDateTime(
-			value,
-			frequency,
-			resetTimeUtc,
-			resetWeekday,
-			intervalMode
-		),
+		anchorDate:
+			frequency === 'biweekly'
+				? normalizeBiweeklyAnchorDate(value, resetWeekday ?? 'monday', timeBasis)
+				: undefined,
+		anchorDateTimeUtc: normalizeIntervalAnchorDateTime(value, frequency, intervalMode),
 		intervalMinutes:
 			frequency === 'interval' ? normalizeIntervalMinutes(value.intervalMinutes) : undefined,
 		intervalMode: frequency === 'interval' ? intervalMode : undefined
@@ -237,14 +242,23 @@ function normalizePortableSchedule(
 	options: ChecklistParseOptions
 ): RecurringSchedule | null {
 	if (!isRecord(value) || !isFrequency(value.frequency)) return null;
+	const legacyTimeFields = normalizeLegacyScheduleTimeFields(value);
 	const hasValidAnchorDateTime =
 		typeof value.anchorDateTimeUtc === 'string' && parseUtcDateTimeInput(value.anchorDateTimeUtc);
 	const hasValidLegacyResetTime =
 		typeof value.resetTimeUtc === 'string' && isValidResetTime(value.resetTimeUtc);
+	const hasValidResetTime =
+		typeof value.resetTime === 'string' && isValidResetTime(value.resetTime);
 
 	if (value.frequency === 'weekly' || value.frequency === 'biweekly') {
 		if (value.resetWeekday !== undefined && !isWeekday(value.resetWeekday)) return null;
 	}
+
+	if (value.timeBasis !== undefined && value.timeBasis !== 'utc' && value.timeBasis !== 'local') {
+		return null;
+	}
+
+	if (value.resetTime !== undefined && !hasValidResetTime) return null;
 
 	if (value.availableWeekdays !== undefined) {
 		if (value.frequency !== 'daily' || !isValidAvailableWeekdays(value.availableWeekdays)) {
@@ -252,7 +266,20 @@ function normalizePortableSchedule(
 		}
 	}
 
-	if (value.availableStartTimeUtc !== undefined || value.availableEndTimeUtc !== undefined) {
+	if (value.availableStartTime !== undefined || value.availableEndTime !== undefined) {
+		if (
+			value.frequency !== 'daily' ||
+			typeof value.availableStartTime !== 'string' ||
+			typeof value.availableEndTime !== 'string' ||
+			!isValidResetTime(value.availableStartTime) ||
+			!isValidResetTime(value.availableEndTime) ||
+			value.availableStartTime === value.availableEndTime
+		) {
+			return null;
+		}
+	}
+
+	if (legacyTimeFields.hasAvailabilityWindow) {
 		if (
 			value.frequency !== 'daily' ||
 			typeof value.availableStartTimeUtc !== 'string' ||
@@ -268,7 +295,8 @@ function normalizePortableSchedule(
 	if (value.resetTimeUtc !== undefined && !hasValidLegacyResetTime) return null;
 
 	if (
-		!(value.frequency === 'interval' && value.intervalMode === 'completion') &&
+		value.frequency !== 'interval' &&
+		!hasValidResetTime &&
 		!hasValidAnchorDateTime &&
 		!hasValidLegacyResetTime
 	) {
@@ -279,6 +307,14 @@ function normalizePortableSchedule(
 		if (typeof value.anchorDateTimeUtc === 'string' && !hasValidAnchorDateTime) return null;
 
 		if (
+			value.anchorDate !== undefined &&
+			(typeof value.anchorDate !== 'string' || !parseUtcDateInput(value.anchorDate))
+		) {
+			return null;
+		}
+
+		if (
+			value.anchorDate === undefined &&
 			value.anchorDateTimeUtc === undefined &&
 			(typeof value.anchorDate !== 'string' || !parseUtcDateInput(value.anchorDate))
 		) {
@@ -343,52 +379,43 @@ function isValidAvailableWeekdays(value: unknown): boolean {
 function normalizeAvailableTimeWindow(
 	startTime: unknown,
 	endTime: unknown
-): Pick<RecurringSchedule, 'availableStartTimeUtc' | 'availableEndTimeUtc'> {
+): Pick<RecurringSchedule, 'availableStartTime' | 'availableEndTime'> {
 	if (typeof startTime !== 'string' || typeof endTime !== 'string') return {};
 
-	const availableStartTimeUtc = normalizeResetTime(startTime);
-	const availableEndTimeUtc = normalizeResetTime(endTime);
-	if (availableStartTimeUtc === availableEndTimeUtc) return {};
+	const availableStartTime = normalizeResetTime(startTime);
+	const availableEndTime = normalizeResetTime(endTime);
+	if (availableStartTime === availableEndTime) return {};
 
-	return { availableStartTimeUtc, availableEndTimeUtc };
+	return { availableStartTime, availableEndTime };
 }
 
-function normalizeBiweeklyAnchorDateTime(
+function normalizeBiweeklyAnchorDate(
 	value: Record<string, unknown>,
-	resetTimeUtc: string,
-	resetWeekday: Weekday
+	resetWeekday: Weekday,
+	timeBasis: ScheduleTimeBasis
 ): string {
 	const rawDateTime =
 		typeof value.anchorDateTimeUtc === 'string'
 			? parseUtcDateTimeInput(value.anchorDateTimeUtc)
 			: null;
 	const rawDate =
+		(typeof value.anchorDate === 'string' ? value.anchorDate : undefined) ??
 		rawDateTime?.toISOString().slice(0, 10) ??
-		(typeof value.anchorDate === 'string' ? value.anchorDate : todayUtc());
-	const alignedDate = alignDateToWeekday(rawDate, resetWeekday);
-	const { hours, minutes } = parseResetTime(resetTimeUtc);
+		todayUtc();
 
-	return `${alignedDate}T${hours.toString().padStart(2, '0')}:${minutes
-		.toString()
-		.padStart(2, '0')}:00.000Z`;
+	return alignDateToWeekday(rawDate, resetWeekday, timeBasis);
 }
 
-function normalizeScheduleAnchorDateTime(
+function normalizeIntervalAnchorDateTime(
 	value: Record<string, unknown>,
 	frequency: Frequency,
-	resetTimeUtc: string,
-	resetWeekday: Weekday | undefined,
 	intervalMode: 'anchor' | 'completion'
 ): string | undefined {
-	if (frequency === 'interval' && intervalMode === 'completion') {
+	if (frequency !== 'interval' || intervalMode === 'completion') {
 		return undefined;
 	}
 
-	if (frequency === 'biweekly') {
-		return normalizeBiweeklyAnchorDateTime(value, resetTimeUtc, resetWeekday ?? 'monday');
-	}
-
-	const fallback = `${todayUtc()}T${resetTimeUtc}:00.000Z`;
+	const fallback = new Date().toISOString();
 	return (
 		normalizeUtcDateTimeInput(
 			typeof value.anchorDateTimeUtc === 'string' ? value.anchorDateTimeUtc : fallback
@@ -396,9 +423,53 @@ function normalizeScheduleAnchorDateTime(
 	);
 }
 
-function legacyResetTime(value: Record<string, unknown>): string {
-	if (typeof value.resetTimeUtc === 'string') return normalizeResetTime(value.resetTimeUtc);
+function normalizeScheduleTimeBasis(value: unknown): ScheduleTimeBasis {
+	return value === 'local' ? 'local' : 'utc';
+}
 
+function scheduleResetTime(
+	value: Record<string, unknown>,
+	legacyTimeFields: LegacyScheduleTimeFields
+): string {
+	if (typeof value.resetTime === 'string') return normalizeResetTime(value.resetTime);
+	if (legacyTimeFields.resetTime) return legacyTimeFields.resetTime;
+
+	return '05:00';
+}
+
+type LegacyScheduleTimeFields = {
+	resetTime?: string;
+	availableStartTime?: string;
+	availableEndTime?: string;
+	hasAvailabilityWindow: boolean;
+};
+
+function normalizeLegacyScheduleTimeFields(
+	value: Record<string, unknown>
+): LegacyScheduleTimeFields {
+	// TODO: Delete this temporary compatibility path after old schedule JSON is no longer supported.
+	const resetTime =
+		typeof value.resetTimeUtc === 'string'
+			? normalizeResetTime(value.resetTimeUtc)
+			: legacyAnchorResetTime(value);
+	const hasAvailabilityWindow =
+		value.availableStartTimeUtc !== undefined || value.availableEndTimeUtc !== undefined;
+
+	return {
+		resetTime,
+		availableStartTime:
+			typeof value.availableStartTimeUtc === 'string'
+				? normalizeResetTime(value.availableStartTimeUtc)
+				: undefined,
+		availableEndTime:
+			typeof value.availableEndTimeUtc === 'string'
+				? normalizeResetTime(value.availableEndTimeUtc)
+				: undefined,
+		hasAvailabilityWindow
+	};
+}
+
+function legacyAnchorResetTime(value: Record<string, unknown>): string | undefined {
 	if (typeof value.anchorDateTimeUtc === 'string') {
 		const parsed = parseUtcDateTimeInput(value.anchorDateTimeUtc);
 		if (parsed) {
@@ -409,7 +480,7 @@ function legacyResetTime(value: Record<string, unknown>): string {
 		}
 	}
 
-	return '05:00';
+	return undefined;
 }
 
 export function isRecord(value: unknown): value is Record<string, unknown> {

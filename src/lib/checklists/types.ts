@@ -1,6 +1,7 @@
 export type BaseFrequency = 'daily' | 'weekly' | 'biweekly' | 'interval';
 export type Frequency = BaseFrequency;
 export type IntervalMode = 'anchor' | 'completion';
+export type ScheduleTimeBasis = 'utc' | 'local';
 export type Weekday =
 	| 'sunday'
 	| 'monday'
@@ -12,10 +13,13 @@ export type Weekday =
 
 export type RecurringSchedule = {
 	frequency: Frequency;
+	timeBasis?: ScheduleTimeBasis;
+	resetTime?: string;
 	resetWeekday?: Weekday;
 	availableWeekdays?: Weekday[];
-	availableStartTimeUtc?: string;
-	availableEndTimeUtc?: string;
+	availableStartTime?: string;
+	availableEndTime?: string;
+	anchorDate?: string;
 	anchorDateTimeUtc?: string;
 	intervalMinutes?: number;
 	intervalMode?: IntervalMode;

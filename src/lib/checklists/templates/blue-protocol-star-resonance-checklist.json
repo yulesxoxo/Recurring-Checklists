@@ -9,18 +9,21 @@
 				"name": "Daily",
 				"defaultSchedule": {
 					"frequency": "daily",
-					"anchorDateTimeUtc": "2026-06-25T07:00:00.000Z"
+					"timeBasis": "utc",
+					"resetTime": "07:00"
 				},
 				"tasks": [
 					{
 						"title": "Guild Hunt",
 						"schedule": {
 							"frequency": "daily",
+							"timeBasis": "utc",
+							"resetTime": "07:00",
 							"availableWeekdays": ["friday", "saturday", "sunday"],
-							"availableStartTimeUtc": "16:00",
-							"availableEndTimeUtc": "06:00",
-							"anchorDateTimeUtc": "2026-06-25T07:00:00.000Z"
-						}
+							"availableStartTime": "16:00",
+							"availableEndTime": "06:00"
+						},
+						"repeatCount": 2
 					},
 					{
 						"title": "Mystery Store"
@@ -53,6 +56,11 @@
 						"title": "Daily Mission"
 					},
 					{
+						"title": "Homestead - Commissions",
+						"repeatCount": 3,
+						"maxCarryover": 9
+					},
+					{
 						"title": "Musician: Daily Routine",
 						"notes": "50 EXP"
 					}
@@ -62,8 +70,9 @@
 				"name": "Weekly",
 				"defaultSchedule": {
 					"frequency": "weekly",
-					"resetWeekday": "monday",
-					"anchorDateTimeUtc": "2026-06-25T07:00:00.000Z"
+					"timeBasis": "utc",
+					"resetTime": "07:00",
+					"resetWeekday": "monday"
 				},
 				"tasks": [
 					{
@@ -71,13 +80,16 @@
 						"repeatCount": 3
 					},
 					{
-						"title": "Raid S1"
+						"title": "Raid S1",
+						"repeatCount": 3
 					},
 					{
-						"title": "Raid S2"
+						"title": "Raid S2",
+						"repeatCount": 3
 					},
 					{
-						"title": "Raid S3"
+						"title": "Raid S3",
+						"repeatCount": 3
 					},
 					{
 						"title": "Slumberdream Valley"
@@ -91,10 +103,10 @@
 						"repeatCount": 6
 					},
 					{
-						"title": "Friendship Points 2000"
+						"title": "Friendship Points - 2000"
 					},
 					{
-						"title": "Dungeon Henry Chest",
+						"title": "Dungeon - Squeaky Boarlet's Chest",
 						"repeatCount": 5
 					},
 					{
@@ -108,8 +120,10 @@
 				"name": "Biweekly",
 				"defaultSchedule": {
 					"frequency": "biweekly",
+					"timeBasis": "utc",
+					"resetTime": "03:00",
 					"resetWeekday": "monday",
-					"anchorDateTimeUtc": "2026-06-29T03:00:00.000Z"
+					"anchorDate": "2026-07-06"
 				},
 				"tasks": [
 					{
