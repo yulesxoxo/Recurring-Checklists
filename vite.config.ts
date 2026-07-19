@@ -5,6 +5,9 @@ import adapter from '@sveltejs/adapter-cloudflare';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
+	define: {
+		__BUILD_TIME__: JSON.stringify(new Date().toISOString())
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit({
