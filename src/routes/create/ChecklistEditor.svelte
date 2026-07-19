@@ -811,7 +811,7 @@
 							</Accordion.ItemTrigger>
 							<div class="flex flex-wrap justify-end gap-2">
 								<button
-									class="btn-icon btn-icon-sm preset-tonal-surface"
+									class="btn-icon preset-tonal-surface btn-icon-sm"
 									type="button"
 									title="Move section up"
 									aria-label="Move section up"
@@ -821,7 +821,7 @@
 									<ArrowUp size={16} aria-hidden="true" />
 								</button>
 								<button
-									class="btn-icon btn-icon-sm preset-tonal-surface"
+									class="btn-icon preset-tonal-surface btn-icon-sm"
 									type="button"
 									title="Move section down"
 									aria-label="Move section down"
@@ -831,7 +831,7 @@
 									<ArrowDown size={16} aria-hidden="true" />
 								</button>
 								<button
-									class="btn-icon btn-icon-sm preset-tonal-error"
+									class="btn-icon preset-tonal-error btn-icon-sm"
 									type="button"
 									title="Delete section"
 									aria-label="Delete section"
@@ -869,7 +869,7 @@
 											</label>
 											<div class="flex flex-wrap items-end gap-2">
 												<button
-													class="btn-icon btn-icon-sm preset-tonal-surface"
+													class="btn-icon preset-tonal-surface btn-icon-sm"
 													type="button"
 													title="Move task up"
 													aria-label="Move task up"
@@ -879,7 +879,7 @@
 													<ArrowUp size={16} aria-hidden="true" />
 												</button>
 												<button
-													class="btn-icon btn-icon-sm preset-tonal-surface"
+													class="btn-icon preset-tonal-surface btn-icon-sm"
 													type="button"
 													title="Move task down"
 													aria-label="Move task down"
@@ -889,7 +889,7 @@
 													<ArrowDown size={16} aria-hidden="true" />
 												</button>
 												<button
-													class="btn-icon btn-icon-sm preset-tonal-error"
+													class="btn-icon preset-tonal-error btn-icon-sm"
 													type="button"
 													title="Delete task"
 													aria-label="Delete task"

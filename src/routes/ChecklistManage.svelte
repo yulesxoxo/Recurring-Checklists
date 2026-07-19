@@ -314,7 +314,7 @@
 										Enter
 									</button>
 									<button
-										class="btn-icon btn-icon-sm preset-tonal-surface"
+										class="btn-icon preset-tonal-surface btn-icon-sm"
 										type="button"
 										title="Copy direct link"
 										aria-label="Copy direct link"
@@ -323,7 +323,7 @@
 										<Copy size={16} aria-hidden="true" />
 									</button>
 									<button
-										class="btn-icon btn-icon-sm preset-tonal-surface"
+										class="btn-icon preset-tonal-surface btn-icon-sm"
 										type="button"
 										title="Export checklist"
 										aria-label="Export checklist"
@@ -332,7 +332,7 @@
 										<Download size={16} aria-hidden="true" />
 									</button>
 									<button
-										class="btn-icon btn-icon-sm preset-tonal-surface"
+										class="btn-icon preset-tonal-surface btn-icon-sm"
 										type="button"
 										title="Edit checklist"
 										aria-label="Edit checklist"
@@ -341,7 +341,7 @@
 										<Pencil size={16} aria-hidden="true" />
 									</button>
 									<button
-										class="btn-icon btn-icon-sm preset-tonal-error"
+										class="btn-icon preset-tonal-error btn-icon-sm"
 										type="button"
 										title="Delete checklist"
 										aria-label="Delete checklist"
