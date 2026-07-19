@@ -55,7 +55,7 @@
 						"title": "Shop at Able Sisters",
 						"schedule": {
 							"frequency": "daily",
-							"timeBasis": "utc",
+							"timeBasis": "local",
 							"resetTime": "05:00",
 							"availableStartTime": "09:00",
 							"availableEndTime": "21:00"
