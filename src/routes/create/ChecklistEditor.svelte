@@ -892,16 +892,8 @@
 								</div>
 							</details>
 
-							<div class="mt-4 flex items-center justify-between gap-3">
+							<div class="mt-4">
 								<h4 class="text-sm font-semibold text-surface-300">Tasks</h4>
-								<button
-									class="btn preset-tonal-secondary btn-sm"
-									type="button"
-									onclick={() => addTask(section)}
-								>
-									<Plus size={16} aria-hidden="true" />
-									Task
-								</button>
 							</div>
 
 							<Accordion
@@ -1070,6 +1062,17 @@
 									</Accordion.Item>
 								{/each}
 							</Accordion>
+
+							<div class="mt-3 flex justify-end">
+								<button
+									class="btn preset-tonal-secondary btn-sm"
+									type="button"
+									onclick={() => addTask(section)}
+								>
+									<Plus size={16} aria-hidden="true" />
+									Task
+								</button>
+							</div>
 						</Accordion.ItemContent>
 					</Accordion.Item>
 				{/each}
