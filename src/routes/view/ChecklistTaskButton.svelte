@@ -240,10 +240,14 @@
 		<span class="flex flex-wrap items-center gap-2">
 			<span class="font-medium text-surface-50">{task.title}</span>
 			{#if countLabel}
-				<span class="badge preset-tonal-primary">{countLabel}</span>
+				<span class="badge preset-tonal-primary font-normal [--badge-size:var(--text-xs)]"
+					>{countLabel}</span
+				>
 			{/if}
 			{#if availabilityBadge}
-				<span class={`badge ${availabilityBadgeClass}`}>{availabilityBadge}</span>
+				<span class={`badge font-normal [--badge-size:var(--text-xs)] ${availabilityBadgeClass}`}
+					>{availabilityBadge}</span
+				>
 			{/if}
 		</span>
 		{#if task.notes}

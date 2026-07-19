@@ -276,7 +276,7 @@
 					class="overflow-hidden rounded-container border border-surface-800 bg-surface-900 shadow-sm"
 				>
 					<div
-						class="hidden grid-cols-[minmax(220px,1fr)_120px_100px_310px] gap-4 border-b border-surface-800 bg-surface-800 px-4 py-3 text-xs font-semibold text-surface-300 uppercase md:grid"
+						class="hidden grid-cols-[minmax(220px,1fr)_120px_100px_310px] items-center gap-4 border-b border-surface-800 bg-surface-800 px-4 py-3 text-xs font-semibold text-surface-300 uppercase md:grid"
 					>
 						<span>Checklist</span>
 						<span>Sections</span>
@@ -296,13 +296,15 @@
 										{checklist.description || 'No description'}
 									</p>
 								</div>
-								<div>
-									<span class="badge preset-tonal-primary"
+								<div class="md:justify-self-start">
+									<span class="badge preset-tonal-primary font-normal [--badge-size:var(--text-sm)]"
 										>{checklist.sections.length} sections</span
 									>
 								</div>
-								<div>
-									<span class="badge preset-tonal-surface">{countTasks(checklist)} tasks</span>
+								<div class="md:justify-self-start">
+									<span class="badge preset-tonal-surface font-normal [--badge-size:var(--text-sm)]"
+										>{countTasks(checklist)} tasks</span
+									>
 								</div>
 								<div class="flex justify-start gap-2 md:justify-end">
 									<button

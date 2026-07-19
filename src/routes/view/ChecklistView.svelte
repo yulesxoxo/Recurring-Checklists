@@ -90,7 +90,9 @@
 			<Switch.Label>Hide completed</Switch.Label>
 			<Switch.HiddenInput />
 		</Switch>
-		<span class="badge preset-tonal-primary">{countTasks(checklist)} tasks</span>
+		<span class="badge preset-tonal-primary font-normal [--badge-size:var(--text-sm)]"
+			>{countTasks(checklist)} tasks</span
+		>
 	</div>
 
 	<div class="grid gap-5">
@@ -116,7 +118,7 @@
 						{/if}
 					</div>
 					<div class="flex flex-wrap items-center gap-2">
-						<span class="badge preset-tonal-success">
+						<span class="badge preset-tonal-success font-normal [--badge-size:var(--text-sm)]">
 							<CheckCircle2 size={14} aria-hidden="true" />
 							{progress.done} / {progress.total} done
 						</span>
