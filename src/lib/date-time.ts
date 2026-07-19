@@ -194,9 +194,14 @@ export function formatLocalReset(date: Date | null): string {
 	return formatResetDate(date);
 }
 
+export function formatLocalResetWithoutTimeZone(date: Date | null): string {
+	return formatResetDate(date, undefined, false);
+}
+
 export function formatResetDate(
 	date: Date | null,
-	timeZone: string | undefined = undefined
+	timeZone: string | undefined = undefined,
+	includeTimeZone = true
 ): string {
 	if (!date) return 'Not scheduled';
 
@@ -208,7 +213,7 @@ export function formatResetDate(
 		minute: '2-digit',
 		hour12: false,
 		...(timeZone ? { timeZone } : {}),
-		timeZoneName: 'short'
+		...(includeTimeZone ? { timeZoneName: 'short' } : {})
 	});
 
 	return formatter.format(date);

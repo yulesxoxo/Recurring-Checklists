@@ -9,13 +9,13 @@
 	import {
 		describeSchedule,
 		formatLocalReset,
+		formatLocalResetWithoutTimeZone,
 		formatWeekdayList,
 		getNextReset,
 		intervalCompletionExpiresAt,
 		scheduleAvailability,
 		scheduleResetTime,
 		scheduleTimeBasis,
-		localTimeToUtcTime,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
 	import {
@@ -197,7 +197,7 @@
 		}
 
 		return task.schedule && !taskResetMatchesSectionDefault()
-			? `Next reset: ${formatLocalReset(getNextReset(schedule, now))}`
+			? `Next reset: ${formatScheduleNextReset(schedule, now)}`
 			: undefined;
 	}
 
@@ -281,9 +281,7 @@
 		if (!scheduleValue.availableStartTime || !scheduleValue.availableEndTime) return '';
 
 		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			const utcStart = localTimeToUtcTime(scheduleValue.availableStartTime, reference);
-			const utcEnd = localTimeToUtcTime(scheduleValue.availableEndTime, reference);
-			return `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} local / ${utcStart} - ${utcEnd} UTC`;
+			return `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} local`;
 		}
 
 		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTime, reference);
@@ -299,10 +297,17 @@
 	function describeResetTime(scheduleValue: RecurringSchedule, reference: Date): string {
 		const time = scheduleResetTime(scheduleValue);
 		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			return `${time} local / ${localTimeToUtcTime(time, reference)} UTC`;
+			return `${time} local`;
 		}
 
 		return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
+	}
+
+	function formatScheduleNextReset(scheduleValue: RecurringSchedule, reference: Date): string {
+		const nextReset = getNextReset(scheduleValue, reference);
+		return scheduleTimeBasis(scheduleValue) === 'local'
+			? formatLocalResetWithoutTimeZone(nextReset)
+			: formatLocalReset(nextReset);
 	}
 </script>
 

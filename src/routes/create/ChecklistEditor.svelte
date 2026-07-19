@@ -31,6 +31,7 @@
 		alignDateToWeekday,
 		describeSchedule,
 		formatLocalReset,
+		formatLocalResetWithoutTimeZone,
 		formatUtcReset,
 		getNextReset,
 		getResetWindowStart,
@@ -38,7 +39,6 @@
 		scheduleTimeBasis,
 		todayUtc,
 		utcTimeToLocalTime,
-		localTimeToUtcTime,
 		utcDateTimeToInputValue
 	} from '$lib/date-time';
 	import { createId } from '$lib/id';
@@ -481,10 +481,16 @@
 	function resetTimeSummary(schedule: RecurringSchedule): string {
 		const time = scheduleResetTime(schedule);
 		if (scheduleTimeBasis(schedule) === 'local') {
-			return `Local ${time} / UTC ${localTimeToUtcTime(time, now)}`;
+			return `Local ${time}`;
 		}
 
 		return `UTC ${time} / Local ${utcTimeToLocalTime(time, now)}`;
+	}
+
+	function formatEditorLocalReset(schedule: RecurringSchedule, date: Date | null): string {
+		return scheduleTimeBasis(schedule) === 'local'
+			? formatLocalResetWithoutTimeZone(date)
+			: formatLocalReset(date);
 	}
 
 	function scheduleBasisLabel(schedule: RecurringSchedule): string {
@@ -707,12 +713,12 @@
 		>
 			<div>
 				<div class="font-medium text-surface-100">Previous reset</div>
-				<div>Local: {formatLocalReset(getResetWindowStart(schedule, now))}</div>
+				<div>Local: {formatEditorLocalReset(schedule, getResetWindowStart(schedule, now))}</div>
 				<div>UTC: {formatUtcReset(getResetWindowStart(schedule, now))}</div>
 			</div>
 			<div>
 				<div class="font-medium text-surface-100">Next reset</div>
-				<div>Local: {formatLocalReset(getNextReset(schedule, now))}</div>
+				<div>Local: {formatEditorLocalReset(schedule, getNextReset(schedule, now))}</div>
 				<div>UTC: {formatUtcReset(getNextReset(schedule, now))}</div>
 			</div>
 		</div>

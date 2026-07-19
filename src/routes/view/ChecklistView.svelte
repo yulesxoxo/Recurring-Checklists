@@ -14,12 +14,12 @@
 	import {
 		describeSchedule,
 		formatLocalReset,
+		formatLocalResetWithoutTimeZone,
 		formatWeekdayList,
 		getNextReset,
 		scheduleAvailability,
 		scheduleResetTime,
 		scheduleTimeBasis,
-		localTimeToUtcTime,
 		utcTimeToLocalTime
 	} from '$lib/date-time';
 	import { taskIsDone as isTaskDone } from '$lib/checklists/progress';
@@ -121,9 +121,7 @@
 		if (!scheduleValue.availableStartTime || !scheduleValue.availableEndTime) return '';
 
 		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			const utcStart = localTimeToUtcTime(scheduleValue.availableStartTime, reference);
-			const utcEnd = localTimeToUtcTime(scheduleValue.availableEndTime, reference);
-			return `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} local / ${utcStart} - ${utcEnd} UTC`;
+			return `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} local`;
 		}
 
 		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTime, reference);
@@ -139,10 +137,17 @@
 	function describeResetTime(scheduleValue: RecurringSchedule, reference: Date): string {
 		const time = scheduleResetTime(scheduleValue);
 		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			return `${time} local / ${localTimeToUtcTime(time, reference)} UTC`;
+			return `${time} local`;
 		}
 
 		return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
+	}
+
+	function formatScheduleNextReset(scheduleValue: RecurringSchedule, reference: Date): string {
+		const nextReset = getNextReset(scheduleValue, reference);
+		return scheduleTimeBasis(scheduleValue) === 'local'
+			? formatLocalResetWithoutTimeZone(nextReset)
+			: formatLocalReset(nextReset);
 	}
 
 	function updateHideCompleted(details: { checked: boolean }): void {
@@ -177,7 +182,7 @@
 						</p>
 						{#if !(section.defaultSchedule.frequency === 'interval' && section.defaultSchedule.intervalMode === 'completion')}
 							<p class="mt-1 text-xs text-surface-400">
-								Next reset: {formatLocalReset(getNextReset(section.defaultSchedule, now))}
+								Next reset: {formatScheduleNextReset(section.defaultSchedule, now)}
 							</p>
 						{/if}
 					</div>
