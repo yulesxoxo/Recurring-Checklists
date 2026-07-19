@@ -86,7 +86,7 @@ Checklist exports are portable JSON files containing the checklist structure and
 Direct links are local app links. They use the `link` query parameter and open a checklist that already exists in the current browser profile. A checklist can define a human-readable key, or the app falls back to the checklist ID:
 
 ```text
-/view/?link=NTE
+/view/?link=ACNH
 ```
 
 ## Checklist Templates
