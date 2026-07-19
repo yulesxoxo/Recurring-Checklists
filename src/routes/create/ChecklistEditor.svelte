@@ -49,6 +49,7 @@
 
 	let checklist = $state<Checklist>(initialChecklist);
 	let openSectionIds = $state<string[]>(initialChecklist.sections.map((section) => section.id));
+	let openTaskIds = $state<string[]>([]);
 	let editingErrors = $state<EditingErrors>({});
 	let checklistNotFound = $state(false);
 	let now = $state(new Date());
@@ -90,6 +91,7 @@
 
 		checklist = cloneChecklist(existing);
 		openSectionIds = checklist.sections.map((section) => section.id);
+		openTaskIds = [];
 		checklistNotFound = false;
 	}
 
@@ -146,8 +148,13 @@
 	}
 
 	function removeSection(sectionId: string): void {
+		const section = checklist.sections.find((item) => item.id === sectionId);
 		checklist.sections = checklist.sections.filter((section) => section.id !== sectionId);
 		openSectionIds = openSectionIds.filter((id) => id !== sectionId);
+		if (section) {
+			const taskIds = new Set(section.tasks.map((task) => task.id));
+			openTaskIds = openTaskIds.filter((id) => !taskIds.has(id));
+		}
 	}
 
 	function moveSection(sectionId: string, direction: -1 | 1): void {
@@ -161,6 +168,7 @@
 
 	function removeTask(section: ChecklistSection, taskId: string): void {
 		section.tasks = section.tasks.filter((task) => task.id !== taskId);
+		openTaskIds = openTaskIds.filter((id) => id !== taskId);
 	}
 
 	function moveTask(section: ChecklistSection, taskId: string, direction: -1 | 1): void {
@@ -421,6 +429,11 @@
 
 	function updateOpenSections(details: { value: string[] }): void {
 		openSectionIds = details.value;
+	}
+
+	function updateOpenTasks(section: ChecklistSection, details: { value: string[] }): void {
+		const taskIds = new Set(section.tasks.map((task) => task.id));
+		openTaskIds = [...openTaskIds.filter((id) => !taskIds.has(id)), ...details.value];
 	}
 
 	function dateInputMinForWeekday(weekday: Weekday): string {
@@ -786,26 +799,38 @@
 			>
 				{#each checklist.sections as section, sectionIndex (section.id)}
 					<Accordion.Item
-						class="overflow-hidden rounded-base border border-surface-800 bg-surface-950"
+						class="overflow-hidden rounded-base border border-primary-800 bg-surface-950 shadow-sm"
 						value={section.id}
 					>
 						<div
-							class="grid gap-2 border-b border-surface-800 bg-surface-900 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+							class="grid gap-2 border-b border-primary-800 bg-primary-950/45 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
 						>
 							<Accordion.ItemTrigger
-								class="flex min-w-0 items-center gap-3 rounded-base px-2 py-1 text-left transition hover:bg-surface-800"
+								class="flex min-w-0 items-center gap-3 rounded-base px-2 py-1 text-left transition hover:bg-primary-900/50"
 							>
-								<Accordion.ItemIndicator class="shrink-0 text-surface-400">
+								<Accordion.ItemIndicator class="shrink-0 text-primary-300">
 									<ChevronDown size={18} aria-hidden="true" />
 								</Accordion.ItemIndicator>
 								<span class="min-w-0 flex-1">
 									<span class="block truncate font-semibold text-surface-50">
 										{section.name || 'Untitled section'}
 									</span>
-									<span class="mt-1 flex flex-wrap gap-2 text-xs text-surface-400">
-										<span>{titleCase(section.defaultSchedule.frequency)} default</span>
-										<span>{section.tasks.length} tasks</span>
-										<span>{describeSchedule(section.defaultSchedule)}</span>
+									<span class="mt-1 flex flex-wrap gap-1.5 text-xs text-surface-300">
+										<span
+											class="rounded-full border border-primary-700/60 bg-surface-950 px-2 py-0.5"
+										>
+											{titleCase(section.defaultSchedule.frequency)}
+										</span>
+										<span
+											class="rounded-full border border-primary-700/60 bg-surface-950 px-2 py-0.5"
+										>
+											{section.tasks.length} tasks
+										</span>
+										<span
+											class="rounded-full border border-primary-700/60 bg-surface-950 px-2 py-0.5"
+										>
+											{describeSchedule(section.defaultSchedule)}
+										</span>
 									</span>
 								</span>
 							</Accordion.ItemTrigger>
@@ -843,30 +868,87 @@
 						</div>
 
 						<Accordion.ItemContent class="p-4">
-							<div class="mb-3">
+							<div class="rounded-base border border-surface-800 bg-surface-900 p-3">
+								<div class="mb-3 text-sm font-semibold text-surface-300">Section settings</div>
 								<label class="label">
 									<span class="label-text">Section name</span>
 									<input class="input" bind:value={section.name} placeholder="Daily" required />
 								</label>
 							</div>
 
-							<div class="rounded-base border border-surface-800 bg-surface-900 p-3">
-								<h4 class="mb-3 text-sm font-semibold text-surface-300">Default task schedule</h4>
-								{@render scheduleEditor(section.defaultSchedule)}
-							</div>
+							<details
+								class="mt-3 overflow-hidden rounded-base border border-surface-800 bg-surface-900"
+							>
+								<summary
+									class="flex cursor-pointer items-center justify-between gap-3 px-3 py-3 text-sm text-surface-300 hover:bg-surface-800"
+								>
+									<span class="font-semibold">Default task schedule</span>
+									<span class="text-right text-xs text-surface-400">
+										{describeSchedule(section.defaultSchedule)} · Edit
+									</span>
+								</summary>
+								<div class="border-t border-surface-800 p-3">
+									{@render scheduleEditor(section.defaultSchedule)}
+								</div>
+							</details>
 
-							<div class="mt-4">
+							<div class="mt-4 flex items-center justify-between gap-3">
 								<h4 class="text-sm font-semibold text-surface-300">Tasks</h4>
+								<button
+									class="btn preset-tonal-secondary btn-sm"
+									type="button"
+									onclick={() => addTask(section)}
+								>
+									<Plus size={16} aria-hidden="true" />
+									Task
+								</button>
 							</div>
 
-							<div class="mt-3 flex flex-col gap-3">
+							<Accordion
+								class="mt-3 flex flex-col gap-2"
+								multiple
+								collapsible
+								value={openTaskIds.filter((id) => section.tasks.some((task) => task.id === id))}
+								onValueChange={(details) => updateOpenTasks(section, details)}
+							>
 								{#each section.tasks as task, taskIndex (task.id)}
-									<div class="grid gap-2 rounded-base border border-surface-800 bg-surface-900 p-3">
-										<div class="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-											<label class="label min-w-0">
-												<span class="label-text">Task title</span>
-												<input class="input" bind:value={task.title} placeholder="Task title" />
-											</label>
+									<Accordion.Item
+										class="overflow-hidden rounded-base border border-surface-800 bg-surface-900"
+										value={task.id}
+									>
+										<div class="grid gap-2 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+											<Accordion.ItemTrigger
+												class="flex min-w-0 items-start gap-3 rounded-base px-1 py-1 text-left transition hover:bg-surface-800"
+											>
+												<Accordion.ItemIndicator class="mt-0.5 shrink-0 text-surface-400">
+													<ChevronDown size={18} aria-hidden="true" />
+												</Accordion.ItemIndicator>
+												<span class="min-w-0 flex-1">
+													<span class="block truncate font-medium text-surface-100">
+														{task.title || 'Untitled task'}
+													</span>
+													{#if task.notes}
+														<span class="mt-1 block truncate text-xs text-surface-400"
+															>{task.notes}</span
+														>
+													{/if}
+													<span class="mt-2 flex flex-wrap gap-1.5 text-xs text-surface-400">
+														<span
+															class="rounded-full border border-primary-700 bg-primary-950 px-2 py-0.5 text-primary-100"
+														>
+															{task.schedule ? 'Custom schedule' : 'Section schedule'}:
+															{describeSchedule(effectiveTaskSchedule(task, section))}
+														</span>
+														{#if taskRepeatCount(task) > 1}
+															<span
+																class="rounded-full border border-secondary-700 bg-secondary-950 px-2 py-0.5 text-secondary-100"
+															>
+																{taskRepeatCount(task)} repeats
+															</span>
+														{/if}
+													</span>
+												</span>
+											</Accordion.ItemTrigger>
 											<div class="flex flex-wrap items-end gap-2">
 												<button
 													class="btn-icon preset-tonal-surface btn-icon-sm"
@@ -899,81 +981,95 @@
 												</button>
 											</div>
 										</div>
-										<label class="label">
-											<span class="label-text">Notes</span>
-											<textarea
-												class="textarea"
-												bind:value={task.notes}
-												rows="2"
-												placeholder="Optional notes"></textarea>
-										</label>
-										<div class="grid gap-3 sm:grid-cols-2">
+										<Accordion.ItemContent class="border-t border-surface-800 p-3">
 											<label class="label">
-												<span class="label-text">Repeats per reset</span>
-												<input
-													class="input"
-													type="number"
-													min="1"
-													step="1"
-													value={taskRepeatCount(task)}
-													oninput={(event) =>
-														updateTaskRepeatCount(task, event.currentTarget.value)}
-												/>
+												<span class="label-text">Task title</span>
+												<input class="input" bind:value={task.title} placeholder="Task title" />
 											</label>
-											<label class="label">
-												<span class="label-text">Stored attempt cap</span>
-												<input
-													class="input"
-													type="number"
-													min={taskRepeatCount(task)}
-													step="1"
-													value={taskMaxCarryover(task)}
-													oninput={(event) =>
-														updateTaskMaxCarryover(task, event.currentTarget.value)}
-												/>
-												<span class="text-xs text-surface-400">
-													Set higher than repeats when attempts can carry over.
-												</span>
-											</label>
-										</div>
-										<div class="rounded-base border border-surface-800 bg-surface-950 p-3">
-											<div
-												class="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
+											<details
+												class="mt-3 overflow-hidden rounded-base border border-surface-800 bg-surface-950"
 											>
-												<h5 class="text-sm font-semibold text-surface-300">Task schedule</h5>
-												<label class="flex items-center gap-2 text-sm text-surface-300">
-													<input
-														class="checkbox"
-														type="checkbox"
-														checked={task.schedule !== undefined}
-														onchange={(event) =>
-															setTaskCustomSchedule(task, section, event.currentTarget.checked)}
-													/>
-													<span>Custom schedule</span>
-												</label>
-											</div>
-											{#if task.schedule}
-												{@render scheduleEditor(task.schedule)}
-											{:else}
-												<p class="text-sm text-surface-400">
-													Uses section default: {describeSchedule(section.defaultSchedule)}
-												</p>
-											{/if}
-										</div>
-									</div>
+												<summary
+													class="flex cursor-pointer items-center justify-between gap-3 px-3 py-3 text-sm text-surface-300 hover:bg-surface-900"
+												>
+													<span class="font-medium">Task options</span>
+													<span class="text-xs text-surface-400">Notes, repeats, carryover</span>
+												</summary>
+												<div class="border-t border-surface-800 p-3">
+													<label class="label">
+														<span class="label-text">Notes</span>
+														<textarea
+															class="textarea"
+															bind:value={task.notes}
+															rows="2"
+															placeholder="Optional notes"></textarea>
+													</label>
+													<div class="mt-3 grid gap-3 sm:grid-cols-2">
+														<label class="label">
+															<span class="label-text">Repeats per reset</span>
+															<input
+																class="input"
+																type="number"
+																min="1"
+																step="1"
+																value={taskRepeatCount(task)}
+																oninput={(event) =>
+																	updateTaskRepeatCount(task, event.currentTarget.value)}
+															/>
+														</label>
+														<label class="label">
+															<span class="label-text">Stored attempt cap</span>
+															<input
+																class="input"
+																type="number"
+																min={taskRepeatCount(task)}
+																step="1"
+																value={taskMaxCarryover(task)}
+																oninput={(event) =>
+																	updateTaskMaxCarryover(task, event.currentTarget.value)}
+															/>
+															<span class="text-xs text-surface-400">
+																Set higher than repeats when attempts can carry over.
+															</span>
+														</label>
+													</div>
+												</div>
+											</details>
+											<details
+												class="mt-3 overflow-hidden rounded-base border border-surface-800 bg-surface-950"
+											>
+												<summary
+													class="flex cursor-pointer items-center justify-between gap-3 px-3 py-3 text-sm text-surface-300 hover:bg-surface-900"
+												>
+													<span class="font-medium">Task schedule</span>
+													<span class="text-right text-xs text-surface-400">
+														{task.schedule ? 'Custom schedule' : 'Uses section default'} · Edit
+													</span>
+												</summary>
+												<div class="border-t border-surface-800 p-3">
+													<label class="flex items-center gap-2 text-sm text-surface-300">
+														<input
+															class="checkbox"
+															type="checkbox"
+															checked={task.schedule !== undefined}
+															onchange={(event) =>
+																setTaskCustomSchedule(task, section, event.currentTarget.checked)}
+														/>
+														<span>Custom schedule</span>
+													</label>
+													{#if task.schedule}
+														{@render scheduleEditor(task.schedule)}
+													{:else}
+														<p class="text-sm text-surface-400">
+															Uses section default: {describeSchedule(section.defaultSchedule)}
+														</p>
+													{/if}
+												</div>
+											</details>
+										</Accordion.ItemContent>
+									</Accordion.Item>
 								{/each}
-							</div>
-
-							<div class="mt-3 flex justify-end">
-								<button
-									class="btn preset-tonal-secondary btn-sm"
-									type="button"
-									onclick={() => addTask(section)}
-								>
-									<Plus size={16} aria-hidden="true" />
-									Task
-								</button>
-							</div>
+							</Accordion>
 						</Accordion.ItemContent>
 					</Accordion.Item>
 				{/each}

@@ -5,10 +5,9 @@ This project uses:
 - Svelte
 - Skeleton UI
 
-Before writing or modifying Svelte or Skeleton UI code, read:
-https://www.skeleton.dev/llms-svelte.txt
+## Skeleton UI reference
 
-Use that document as the source of truth for:
+Skeleton UI documentation is the source of truth for:
 
 - Skeleton components
 - Svelte patterns
@@ -16,4 +15,10 @@ Use that document as the source of truth for:
 - syntax examples
 - recommended approaches
 
-If you need Skeleton-specific information, fetch that URL before answering.
+Reference:
+https://www.skeleton.dev/llms-svelte.txt
+
+Before implementing Skeleton-specific code:
+
+- First check whether the Skeleton documentation is already available in the current context.
+- Only fetch the URL if the relevant information is not already available or if the current context is insufficient.
