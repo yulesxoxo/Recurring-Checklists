@@ -1,0 +1,142 @@
+{
+	"version": 1,
+	"checklist": {
+		"name": "Animal Crossing: New Horizons",
+		"description": "",
+		"linkKey": "ACNH",
+		"sections": [
+			{
+				"name": "Daily",
+				"defaultSchedule": {
+					"frequency": "daily",
+					"anchorDateTimeUtc": "2026-07-19T03:00:00.000Z"
+				},
+				"tasks": [
+					{
+						"title": "Read Fortune - Katrina",
+						"notes": "Bring 22,000 Bells"
+					},
+					{
+						"title": "Drink Coffee at The Roost"
+					},
+					{
+						"title": "Perform Group Stretches"
+					},
+					{
+						"title": "Collect Fossils",
+						"repeatCount": 4
+					},
+					{
+						"title": "Hit Money Rock"
+					},
+					{
+						"title": "Plant Money Tree",
+						"notes": "Plant 10,000 Bells"
+					},
+					{
+						"title": "Collect Message in a Bottle"
+					},
+					{
+						"title": "Shake Trees - Furniture",
+						"repeatCount": 2
+					},
+					{
+						"title": "Shop at Nook's Cranny",
+						"schedule": {
+							"frequency": "daily",
+							"availableStartTimeUtc": "08:00",
+							"availableEndTimeUtc": "22:00",
+							"anchorDateTimeUtc": "2026-07-19T03:00:00.000Z"
+						}
+					},
+					{
+						"title": "Shop at Able Sisters",
+						"schedule": {
+							"frequency": "daily",
+							"availableStartTimeUtc": "09:00",
+							"availableEndTimeUtc": "21:00",
+							"anchorDateTimeUtc": "2026-07-19T03:00:00.000Z"
+						}
+					},
+					{
+						"title": "Dive for 1 Scallop"
+					}
+				]
+			},
+			{
+				"name": "Dailies - Villagers",
+				"defaultSchedule": {
+					"frequency": "daily",
+					"anchorDateTimeUtc": "2026-07-19T03:00:00.000Z"
+				},
+				"tasks": [
+					{
+						"title": "Interact - Ankha"
+					},
+					{
+						"title": "Interact - Bea"
+					},
+					{
+						"title": "Interact - Cece"
+					},
+					{
+						"title": "Interact - Chai"
+					},
+					{
+						"title": "Interact - Lucky"
+					},
+					{
+						"title": "Interact - Mineru"
+					},
+					{
+						"title": "Interact - Pekoe"
+					},
+					{
+						"title": "Interact - Shino"
+					},
+					{
+						"title": "Interact - Tiansheng"
+					},
+					{
+						"title": "Interact - Zucker"
+					}
+				]
+			},
+			{
+				"name": "Dailies - Happy Home Paradise",
+				"defaultSchedule": {
+					"frequency": "daily",
+					"anchorDateTimeUtc": "2026-07-19T03:00:00.000Z"
+				},
+				"tasks": [
+					{
+						"title": "Collect Message in a Bottle"
+					},
+					{
+						"title": "Buy from Paradise Planning Shop",
+						"repeatCount": 5
+					},
+					{
+						"title": "Talk with Customers",
+						"notes": "Northeastern Beach"
+					},
+					{
+						"title": "Go to Restaurant",
+						"notes": "Cooking DIY"
+					},
+					{
+						"title": "Apparel Shop",
+						"repeatCount": 6
+					},
+					{
+						"title": "Harvest Moss and Vines"
+					},
+					{
+						"title": "Hospital",
+						"notes": "Free Turnips"
+					}
+				]
+			}
+		]
+	}
+}
