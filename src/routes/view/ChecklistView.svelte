@@ -12,14 +12,10 @@
 		countTasks
 	} from '$lib/checklists';
 	import {
-		describeSchedule,
+		describeScheduleForDisplay,
 		formatScheduleLocalReset,
-		formatWeekdayList,
 		getNextReset,
-		scheduleAvailability,
-		scheduleResetTime,
-		scheduleTimeBasis,
-		utcTimeToLocalTime
+		scheduleAvailability
 	} from '$lib/date-time';
 	import { taskIsDone as isTaskDone } from '$lib/checklists/progress';
 
@@ -80,68 +76,6 @@
 		return task.schedule ?? section.defaultSchedule;
 	}
 
-	function describeViewSchedule(schedule: RecurringSchedule, reference: Date): string {
-		if (schedule.frequency === 'interval') return describeSchedule(schedule);
-
-		const resetTime = describeResetTime(schedule, reference);
-
-		switch (schedule.frequency) {
-			case 'daily':
-				return `${describeDailyAvailability(schedule, reference)} at ${resetTime}`;
-			case 'weekly':
-				return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
-			case 'biweekly':
-				return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
-		}
-	}
-
-	function titleCase(value: string): string {
-		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
-	}
-
-	function describeDailyAvailability(schedule: RecurringSchedule, reference: Date): string {
-		const descriptionParts = [
-			...(schedule.availableWeekdays?.length
-				? [formatWeekdayList(schedule.availableWeekdays)]
-				: []),
-			...(schedule.availableStartTime && schedule.availableEndTime
-				? [describeAvailabilityTimeWindow(schedule, reference)]
-				: [])
-		];
-		if (descriptionParts.length === 0) return 'Resets daily';
-
-		return `Available ${descriptionParts.join(', ')}; resets`;
-	}
-
-	function describeAvailabilityTimeWindow(
-		scheduleValue: RecurringSchedule,
-		reference: Date
-	): string {
-		if (!scheduleValue.availableStartTime || !scheduleValue.availableEndTime) return '';
-
-		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			return `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} local`;
-		}
-
-		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTime, reference);
-		const localEnd = utcTimeToLocalTime(scheduleValue.availableEndTime, reference);
-		const utcWindow = `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} UTC`;
-		const localWindow = `${localStart} - ${localEnd} local`;
-
-		return localWindow === utcWindow.replace(' UTC', '')
-			? utcWindow
-			: `${localWindow} / ${utcWindow}`;
-	}
-
-	function describeResetTime(scheduleValue: RecurringSchedule, reference: Date): string {
-		const time = scheduleResetTime(scheduleValue);
-		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			return `${time} local`;
-		}
-
-		return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
-	}
-
 	function updateHideCompleted(details: { checked: boolean }): void {
 		hideCompletedTasks = details.checked;
 	}
@@ -170,7 +104,7 @@
 					<div class="min-w-0">
 						<h2 class="text-xl font-semibold text-surface-50">{section.name}</h2>
 						<p class="mt-1 text-sm text-surface-400">
-							{describeViewSchedule(section.defaultSchedule, now)}
+							{describeScheduleForDisplay(section.defaultSchedule, now)}
 						</p>
 						{#if !(section.defaultSchedule.frequency === 'interval' && section.defaultSchedule.intervalMode === 'completion')}
 							<p class="mt-1 text-xs text-surface-400">

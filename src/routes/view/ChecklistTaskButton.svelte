@@ -7,16 +7,14 @@
 		RecurringSchedule
 	} from '$lib/checklists';
 	import {
-		describeSchedule,
+		describeScheduleForDisplay,
 		formatResetDate,
 		formatScheduleLocalReset,
-		formatWeekdayList,
 		getNextReset,
 		intervalCompletionExpiresAt,
 		scheduleAvailability,
 		scheduleResetTime,
-		scheduleTimeBasis,
-		utcTimeToLocalTime
+		scheduleTimeBasis
 	} from '$lib/date-time';
 	import {
 		appendCompletion,
@@ -163,7 +161,7 @@
 	function customScheduleText(): string | undefined {
 		if (!task.schedule) return undefined;
 
-		return describeViewSchedule(schedule, now, !taskResetMatchesSectionDefault());
+		return describeScheduleForDisplay(schedule, now, !taskResetMatchesSectionDefault());
 	}
 
 	function availabilityBadgeText(): string | undefined {
@@ -229,78 +227,6 @@
 		}
 
 		return true;
-	}
-
-	function describeViewSchedule(
-		scheduleValue: RecurringSchedule,
-		reference: Date,
-		includeReset: boolean
-	): string {
-		if (scheduleValue.frequency === 'interval') return describeSchedule(scheduleValue);
-
-		const resetTime = describeResetTime(scheduleValue, reference);
-
-		switch (scheduleValue.frequency) {
-			case 'daily':
-				return `${describeDailyAvailability(scheduleValue, reference, includeReset)}${
-					includeReset ? ` at ${resetTime}` : ''
-				}`;
-			case 'weekly':
-				return `Resets every ${titleCase(scheduleValue.resetWeekday ?? 'monday')} at ${resetTime}`;
-			case 'biweekly':
-				return `Resets every other ${titleCase(scheduleValue.resetWeekday ?? 'monday')} at ${resetTime}`;
-		}
-	}
-
-	function titleCase(value: string): string {
-		return `${value.slice(0, 1).toUpperCase()}${value.slice(1)}`;
-	}
-
-	function describeDailyAvailability(
-		scheduleValue: RecurringSchedule,
-		reference: Date,
-		includeReset: boolean
-	): string {
-		const descriptionParts = [
-			...(scheduleValue.availableWeekdays?.length
-				? [formatWeekdayList(scheduleValue.availableWeekdays)]
-				: []),
-			...(scheduleValue.availableStartTime && scheduleValue.availableEndTime
-				? [describeAvailabilityTimeWindow(scheduleValue, reference)]
-				: [])
-		];
-		if (descriptionParts.length === 0) return includeReset ? 'Resets daily' : '';
-
-		return `Available ${descriptionParts.join(', ')}${includeReset ? '; resets' : ''}`;
-	}
-
-	function describeAvailabilityTimeWindow(
-		scheduleValue: RecurringSchedule,
-		reference: Date
-	): string {
-		if (!scheduleValue.availableStartTime || !scheduleValue.availableEndTime) return '';
-
-		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			return `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} local`;
-		}
-
-		const localStart = utcTimeToLocalTime(scheduleValue.availableStartTime, reference);
-		const localEnd = utcTimeToLocalTime(scheduleValue.availableEndTime, reference);
-		const utcWindow = `${scheduleValue.availableStartTime} - ${scheduleValue.availableEndTime} UTC`;
-		const localWindow = `${localStart} - ${localEnd} local`;
-
-		return localWindow === utcWindow.replace(' UTC', '')
-			? utcWindow
-			: `${localWindow} / ${utcWindow}`;
-	}
-
-	function describeResetTime(scheduleValue: RecurringSchedule, reference: Date): string {
-		const time = scheduleResetTime(scheduleValue);
-		if (scheduleTimeBasis(scheduleValue) === 'local') {
-			return `${time} local`;
-		}
-
-		return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
 	}
 </script>
 

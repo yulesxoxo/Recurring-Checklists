@@ -149,6 +149,27 @@ export function describeSchedule(schedule: RecurringSchedule): string {
 	}
 }
 
+export function describeScheduleForDisplay(
+	schedule: RecurringSchedule,
+	reference: Date,
+	includeDailyReset = true
+): string {
+	if (schedule.frequency === 'interval') return describeSchedule(schedule);
+
+	const resetTime = describeResetTimeForDisplay(schedule, reference);
+
+	switch (schedule.frequency) {
+		case 'daily':
+			return `${describeDailyAvailabilityForDisplay(schedule, reference, includeDailyReset)}${
+				includeDailyReset ? ` at ${resetTime}` : ''
+			}`;
+		case 'weekly':
+			return `Resets every ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
+		case 'biweekly':
+			return `Resets every other ${titleCase(schedule.resetWeekday ?? 'monday')} at ${resetTime}`;
+	}
+}
+
 export function formatWeekdayList(values: Weekday[]): string {
 	const selected = new Set(values);
 	const selectedWeekdays = weekdays.filter((weekday) => selected.has(weekday));
@@ -558,6 +579,13 @@ function scheduleTimeBasisLabel(schedule: RecurringSchedule): string {
 	return scheduleTimeBasis(schedule) === 'local' ? 'local' : 'UTC';
 }
 
+function describeResetTimeForDisplay(schedule: RecurringSchedule, reference: Date): string {
+	const time = scheduleResetTime(schedule);
+	if (scheduleTimeBasis(schedule) === 'local') return `${time} local`;
+
+	return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
+}
+
 function scheduleWeekday(date: Date, timeBasis: ScheduleTimeBasis): Weekday {
 	return weekdaysByIndex[weekdayForBasis(date, timeBasis)];
 }
@@ -588,6 +616,40 @@ function describeDailyAvailability(schedule: RecurringSchedule): string {
 	if (descriptionParts.length === 0) return 'Resets daily';
 
 	return `Available ${descriptionParts.join(', ')}; resets`;
+}
+
+function describeDailyAvailabilityForDisplay(
+	schedule: RecurringSchedule,
+	reference: Date,
+	includeReset: boolean
+): string {
+	const descriptionParts = [
+		...(schedule.availableWeekdays?.length ? [formatWeekdayList(schedule.availableWeekdays)] : []),
+		...(scheduleHasTimeWindow(schedule)
+			? [describeAvailabilityTimeWindowForDisplay(schedule, reference)]
+			: [])
+	];
+	if (descriptionParts.length === 0) return includeReset ? 'Resets daily' : '';
+
+	return `Available ${descriptionParts.join(', ')}${includeReset ? '; resets' : ''}`;
+}
+
+function describeAvailabilityTimeWindowForDisplay(
+	schedule: RecurringSchedule & { availableStartTime: string; availableEndTime: string },
+	reference: Date
+): string {
+	if (scheduleTimeBasis(schedule) === 'local') {
+		return `${schedule.availableStartTime} - ${schedule.availableEndTime} local`;
+	}
+
+	const localStart = utcTimeToLocalTime(schedule.availableStartTime, reference);
+	const localEnd = utcTimeToLocalTime(schedule.availableEndTime, reference);
+	const utcWindow = `${schedule.availableStartTime} - ${schedule.availableEndTime} UTC`;
+	const localWindow = `${localStart} - ${localEnd} local`;
+
+	return localWindow === utcWindow.replace(' UTC', '')
+		? utcWindow
+		: `${localWindow} / ${utcWindow}`;
 }
 
 const weekdaysByIndex: Weekday[] = [
