@@ -15,6 +15,7 @@ import {
 	bankedTaskStatus,
 	createEmptyAppState,
 	exportPortableChecklist,
+	formatPortableChecklistExport,
 	importPortableChecklists,
 	insertArrayItem,
 	linkKeyConflict,
@@ -579,6 +580,21 @@ describe('direct checklist links', () => {
 });
 
 describe('portable exports', () => {
+	it('uses the same tab-indented JSON format as checklist templates', () => {
+		const formatted = formatPortableChecklistExport({
+			version: 1,
+			checklist: {
+				name: 'Operations',
+				description: '',
+				sections: []
+			}
+		});
+
+		expect(formatted).toBe(
+			'{\n\t"version": 1,\n\t"checklist": {\n\t\t"name": "Operations",\n\t\t"description": "",\n\t\t"sections": []\n\t}\n}\n'
+		);
+	});
+
 	it('excludes IDs and completion state', () => {
 		const state: AppState = {
 			version: 1,

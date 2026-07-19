@@ -96,6 +96,10 @@ export function exportPortableChecklist(checklist: Checklist): PortableChecklist
 	};
 }
 
+export function formatPortableChecklistExport(portable: PortableChecklistExport): string {
+	return `${JSON.stringify(portable, null, '\t')}\n`;
+}
+
 export function normalizeLinkKey(value: unknown): string | undefined {
 	if (typeof value !== 'string') return undefined;
 

@@ -22,6 +22,7 @@
 		type Checklist,
 		countTasks,
 		exportPortableChecklist,
+		formatPortableChecklistExport,
 		importPortableChecklists,
 		uniqueLinkKey
 	} from '$lib/checklists';
@@ -67,7 +68,7 @@
 	function exportDefinition(checklist: Checklist): void {
 		importFeedback = '';
 		const portable = exportPortableChecklist(checklist);
-		const blob = new Blob([JSON.stringify(portable, null, 2)], { type: 'application/json' });
+		const blob = new Blob([formatPortableChecklistExport(portable)], { type: 'application/json' });
 		const url = URL.createObjectURL(blob);
 		const link = document.createElement('a');
 		link.href = url;
