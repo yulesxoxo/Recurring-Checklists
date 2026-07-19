@@ -286,7 +286,7 @@
 					<div class="divide-y divide-surface-800">
 						{#each appState.checklists as checklist (checklist.id)}
 							<article
-								class="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1fr)_120px_100px_310px] md:items-center"
+								class="grid gap-3 px-4 py-4 md:grid-cols-[minmax(220px,1fr)_120px_100px_310px] md:items-center md:gap-4"
 							>
 								<div class="min-w-0">
 									<h2 class="truncate text-base font-semibold text-surface-50">
