@@ -511,7 +511,7 @@
 				<span class="label-text">Schedule basis</span>
 				<div class="grid grid-cols-2 overflow-hidden rounded-base border border-surface-700">
 					<button
-						class={`btn btn-sm rounded-none ${
+						class={`btn rounded-none btn-sm ${
 							scheduleTimeBasis(schedule) === 'local'
 								? 'preset-filled-primary-500'
 								: 'preset-tonal-surface'
@@ -522,7 +522,7 @@
 						Local time
 					</button>
 					<button
-						class={`btn btn-sm rounded-none ${
+						class={`btn rounded-none btn-sm ${
 							scheduleTimeBasis(schedule) === 'utc'
 								? 'preset-filled-primary-500'
 								: 'preset-tonal-surface'
@@ -533,7 +533,7 @@
 						UTC
 					</button>
 				</div>
-				<span class="label-text mt-3">Reset time ({scheduleBasisLabel(schedule)})</span>
+				<span class="mt-3 label-text">Reset time ({scheduleBasisLabel(schedule)})</span>
 				<input
 					class="input"
 					type="time"
@@ -966,7 +966,7 @@
 
 							<div class="mt-3 flex justify-end">
 								<button
-									class="btn btn-sm preset-tonal-secondary"
+									class="btn preset-tonal-secondary btn-sm"
 									type="button"
 									onclick={() => addTask(section)}
 								>
@@ -980,7 +980,7 @@
 			</Accordion>
 
 			<button
-				class="btn btn-sm preset-tonal-primary self-end"
+				class="btn self-end preset-tonal-primary btn-sm"
 				type="button"
 				onclick={() => addSection()}
 			>

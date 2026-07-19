@@ -42,7 +42,7 @@
 	<DatePicker.Label class="label-text">{label}</DatePicker.Label>
 	<DatePicker.Control class="grid grid-cols-[minmax(0,1fr)_auto]">
 		<DatePicker.Input class="input rounded-r-none" placeholder="mm/dd/yyyy" />
-		<DatePicker.Trigger class="btn-icon preset-tonal-surface rounded-l-none border-l-0">
+		<DatePicker.Trigger class="btn-icon rounded-l-none border-l-0 preset-tonal-surface">
 			<CalendarDays size={18} aria-hidden="true" />
 		</DatePicker.Trigger>
 	</DatePicker.Control>

@@ -3,13 +3,7 @@ export type Frequency = BaseFrequency;
 export type IntervalMode = 'anchor' | 'completion';
 export type ScheduleTimeBasis = 'utc' | 'local';
 export type Weekday =
-	| 'sunday'
-	| 'monday'
-	| 'tuesday'
-	| 'wednesday'
-	| 'thursday'
-	| 'friday'
-	| 'saturday';
+	'sunday' | 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
 
 export type RecurringSchedule = {
 	frequency: Frequency;
@@ -91,5 +85,4 @@ export type ImportPortableChecklistsOptions = ChecklistParseOptions & {
 };
 
 export type ImportPortableChecklistsResult =
-	| { ok: true; checklist: Checklist }
-	| { ok: false; error: string };
+	{ ok: true; checklist: Checklist } | { ok: false; error: string };

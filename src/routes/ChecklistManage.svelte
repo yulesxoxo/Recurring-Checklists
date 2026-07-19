@@ -276,7 +276,7 @@
 					class="overflow-hidden rounded-container border border-surface-800 bg-surface-900 shadow-sm"
 				>
 					<div
-						class="hidden grid-cols-[minmax(220px,1fr)_120px_100px_310px] gap-4 border-b border-surface-800 bg-surface-800 px-4 py-3 text-xs font-semibold uppercase text-surface-300 md:grid"
+						class="hidden grid-cols-[minmax(220px,1fr)_120px_100px_310px] gap-4 border-b border-surface-800 bg-surface-800 px-4 py-3 text-xs font-semibold text-surface-300 uppercase md:grid"
 					>
 						<span>Checklist</span>
 						<span>Sections</span>
@@ -306,7 +306,7 @@
 								</div>
 								<div class="flex justify-start gap-2 md:justify-end">
 									<button
-										class="btn btn-sm preset-filled-primary-500"
+										class="btn preset-filled-primary-500 btn-sm"
 										type="button"
 										onclick={() => openChecklist(checklist)}
 									>

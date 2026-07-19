@@ -232,7 +232,7 @@
 
 <button
 	type="button"
-	class={`flex w-full cursor-pointer select-none gap-3 rounded-base border p-3 text-left transition ${rowClass}`}
+	class={`flex w-full cursor-pointer gap-3 rounded-base border p-3 text-left transition select-none ${rowClass}`}
 	disabled={!isAvailable}
 	onclick={toggleTask}
 >
@@ -247,7 +247,7 @@
 			{/if}
 		</span>
 		{#if task.notes}
-			<span class="mt-1 block whitespace-pre-line text-sm text-surface-400">{task.notes}</span>
+			<span class="mt-1 block text-sm whitespace-pre-line text-surface-400">{task.notes}</span>
 		{/if}
 		{#if customScheduleDisplay}
 			<span class="mt-2 block text-xs text-surface-400">{customScheduleDisplay}</span>
