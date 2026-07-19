@@ -186,16 +186,10 @@ export function formatWeekdayList(values: Weekday[]): string {
 	return `${labels.slice(0, -1).join(', ')}, and ${labels[labels.length - 1]}`;
 }
 
-export function formatUtcReset(date: Date | null): string {
-	return formatResetDate(date, 'UTC');
-}
-
-export function formatLocalReset(date: Date | null): string {
-	return formatResetDate(date);
-}
-
-export function formatLocalResetWithoutTimeZone(date: Date | null): string {
-	return formatResetDate(date, undefined, false);
+export function formatScheduleLocalReset(schedule: RecurringSchedule, date: Date | null): string {
+	return scheduleTimeBasis(schedule) === 'local'
+		? formatResetDate(date, undefined, false)
+		: formatResetDate(date);
 }
 
 export function formatResetDate(

@@ -8,8 +8,8 @@
 	} from '$lib/checklists';
 	import {
 		describeSchedule,
-		formatLocalReset,
-		formatLocalResetWithoutTimeZone,
+		formatResetDate,
+		formatScheduleLocalReset,
 		formatWeekdayList,
 		getNextReset,
 		intervalCompletionExpiresAt,
@@ -193,11 +193,11 @@
 	function resetText(): string | undefined {
 		if (schedule.frequency === 'interval' && schedule.intervalMode === 'completion') {
 			const clearTime = completionIntervalClearTime(schedule, completion);
-			return clearTime ? `Resets: ${formatLocalReset(clearTime)}` : undefined;
+			return clearTime ? `Resets: ${formatResetDate(clearTime)}` : undefined;
 		}
 
 		return task.schedule && !taskResetMatchesSectionDefault()
-			? `Next reset: ${formatScheduleNextReset(schedule, now)}`
+			? `Next reset: ${formatScheduleLocalReset(schedule, getNextReset(schedule, now))}`
 			: undefined;
 	}
 
@@ -301,13 +301,6 @@
 		}
 
 		return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
-	}
-
-	function formatScheduleNextReset(scheduleValue: RecurringSchedule, reference: Date): string {
-		const nextReset = getNextReset(scheduleValue, reference);
-		return scheduleTimeBasis(scheduleValue) === 'local'
-			? formatLocalResetWithoutTimeZone(nextReset)
-			: formatLocalReset(nextReset);
 	}
 </script>
 

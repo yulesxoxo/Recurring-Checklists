@@ -13,8 +13,7 @@
 	} from '$lib/checklists';
 	import {
 		describeSchedule,
-		formatLocalReset,
-		formatLocalResetWithoutTimeZone,
+		formatScheduleLocalReset,
 		formatWeekdayList,
 		getNextReset,
 		scheduleAvailability,
@@ -143,13 +142,6 @@
 		return `${utcTimeToLocalTime(time, reference)} local / ${time} UTC`;
 	}
 
-	function formatScheduleNextReset(scheduleValue: RecurringSchedule, reference: Date): string {
-		const nextReset = getNextReset(scheduleValue, reference);
-		return scheduleTimeBasis(scheduleValue) === 'local'
-			? formatLocalResetWithoutTimeZone(nextReset)
-			: formatLocalReset(nextReset);
-	}
-
 	function updateHideCompleted(details: { checked: boolean }): void {
 		hideCompletedTasks = details.checked;
 	}
@@ -182,7 +174,10 @@
 						</p>
 						{#if !(section.defaultSchedule.frequency === 'interval' && section.defaultSchedule.intervalMode === 'completion')}
 							<p class="mt-1 text-xs text-surface-400">
-								Next reset: {formatScheduleNextReset(section.defaultSchedule, now)}
+								Next reset: {formatScheduleLocalReset(
+									section.defaultSchedule,
+									getNextReset(section.defaultSchedule, now)
+								)}
 							</p>
 						{/if}
 					</div>
